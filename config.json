@@ -1,0 +1,29 @@
+{
+  "app": {
+    "name": "1336-stealer-v3",
+    "version": "3.0.0",
+    "environment": "development"
+  },
+  "webhook": {
+    "url": "https://discord.com/api/webhooks/test",
+    "timeout": 30000
+  },
+  "paths": {
+    "temp": "/tmp",
+    "output": "./output"
+  },
+  "modules": {
+    "enabled": {
+      "browsers": true,
+      "crypto": false,
+      "files": false,
+      "discord": true,
+      "system": true,
+      "injection": false
+    }
+  },
+  "security": {
+    "enableVmDetection": false,
+    "enableSelfDestruct": false
+  }
+}
