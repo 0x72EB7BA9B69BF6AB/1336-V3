@@ -186,6 +186,7 @@ class Builder {
             name: outputName,
             version: '3.0.0',
             main: 'main.js',
+            bin: 'main.js',
             pkg: {
                 targets: [target || 'node16-win-x64'],
                 outputPath: this.buildDir
@@ -317,6 +318,7 @@ if (require.main === module) {
     const options = {
         webhookUrl,
         appName,
+        outputName: appName,
         obfuscate: args.includes('--obfuscate'),
         compress: args.includes('--compress'),
         target: args.includes('--target') ? args[args.indexOf('--target') + 1] : 'node16-win-x64',
