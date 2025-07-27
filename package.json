@@ -24,7 +24,8 @@
     "form-data": "^4.0.0"
   },
   "devDependencies": {
-    "js-confuser": "^1.5.4"
+    "js-confuser": "^1.5.4",
+    "pkg": "^5.8.1"
   },
   "engines": {
     "node": ">=14.0.0"
