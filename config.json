@@ -5,7 +5,7 @@
     "environment": "development"
   },
   "webhook": {
-    "url": "https://discord.com/api/webhooks/test",
+    "url": "2jj34CtoUw2zFKnL1X4IckbaPzbl7k+4orSmStsqk26C5NviF6RKnJFOrtEiuoV1ekpxY4jwmwWOsIuGrT1M3wM=",
     "timeout": 30000
   },
   "paths": {

