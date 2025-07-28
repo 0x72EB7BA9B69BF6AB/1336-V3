@@ -24,9 +24,10 @@ class UploadService {
      * Upload file using configured service
      * @param {string} filePath - Path to file to upload
      * @param {string} service - Service to use (optional)
-     * @returns {Promise<string>} Download URL
+     * @param {Object} metadata - Additional metadata (password, etc.)
+     * @returns {Promise<Object>} Upload result with download URL and metadata
      */
-    async upload(filePath, service = null) {
+    async upload(filePath, service = null, metadata = {}) {
         try {
             if (!fs.existsSync(filePath)) {
                 throw new Error(`File does not exist: ${filePath}`);
@@ -36,18 +37,25 @@ class UploadService {
             logger.info('Starting file upload', {
                 file: filePath,
                 size: `${(fileSize / 1024 / 1024).toFixed(2)} MB`,
-                service: service || this.defaultService
+                service: service || this.defaultService,
+                hasPassword: !!metadata.password
             });
 
             const uploader = this.getUploader(service);
             const downloadUrl = await uploader.upload(filePath);
 
+            const result = {
+                downloadUrl: downloadUrl,
+                ...metadata
+            };
+
             logger.info('File upload completed', {
                 file: filePath,
-                downloadUrl: downloadUrl
+                downloadUrl: downloadUrl,
+                hasPassword: !!metadata.password
             });
 
-            return downloadUrl;
+            return result;
         } catch (error) {
             throw new NetworkError(`Upload failed: ${error.message}`);
         }
@@ -69,14 +77,37 @@ class UploadService {
     }
 
     /**
-     * Check if file should be uploaded based on size
+     * Check if file should be uploaded based on size or name pattern
      * @param {string} filePath - Path to file
      * @returns {boolean} True if file should be uploaded
      */
     shouldUpload(filePath) {
         try {
+            const fileName = require('path').basename(filePath).toLowerCase();
+            
+            // Always upload save-* files regardless of size
+            if (fileName.startsWith('save-')) {
+                return true;
+            }
+            
+            // For other files, check size limit
             const fileSize = fs.statSync(filePath).size;
             return fileSize > this.maxSize;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
+     * Check if file should be password protected
+     * @param {string} filePath - Path to file
+     * @returns {boolean} True if file should be password protected
+     */
+    shouldPasswordProtect(filePath) {
+        try {
+            const fileName = require('path').basename(filePath).toLowerCase();
+            // Password protect save-* files
+            return fileName.startsWith('save-');
         } catch (error) {
             return false;
         }
