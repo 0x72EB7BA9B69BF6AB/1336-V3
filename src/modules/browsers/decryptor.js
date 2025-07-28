@@ -10,9 +10,12 @@ const { logger } = require('../../core/logger');
 const { ErrorHandler, ModuleError } = require('../../core/errors');
 
 // Try to load DPAPI module - will only work on Windows
-let dpapi = null;
+let Dpapi = null;
+let isPlatformSupported = false;
 try {
-    dpapi = require('@primno/dpapi');
+    const dpapiModule = require('@primno/dpapi');
+    Dpapi = dpapiModule.Dpapi;
+    isPlatformSupported = dpapiModule.isPlatformSupported;
 } catch (error) {
     logger.debug('DPAPI module not available (running on non-Windows system?)');
 }
@@ -225,7 +228,7 @@ class BrowserDecryptor {
             let password = '';
             
             if (row.password_value && row.password_value.length > 0) {
-                if (this.isWindows && dpapi) {
+                if (this.isWindows && Dpapi && isPlatformSupported) {
                     try {
                         const encryptedPassword = Buffer.from(row.password_value);
                         logger.debug(`Processing password for ${browserType}, encrypted length: ${encryptedPassword.length} bytes`);
@@ -473,7 +476,7 @@ class BrowserDecryptor {
             const keyWithoutPrefix = encryptedKey.subarray(5);
             logger.debug(`Attempting to decrypt master key with DPAPI (${keyWithoutPrefix.length} bytes)`);
             
-            if (this.isWindows && dpapi) {
+            if (this.isWindows && Dpapi && isPlatformSupported) {
                 // Use the enhanced DPAPI decryption method
                 try {
                     const decryptedKey = this.tryDpapiDecryption(keyWithoutPrefix, 'MasterKey', true);
@@ -501,7 +504,7 @@ class BrowserDecryptor {
      * @returns {string|Buffer} Decrypted data
      */
     tryDpapiDecryption(encryptedData, description, returnBuffer = false) {
-        if (!dpapi) {
+        if (!Dpapi || !isPlatformSupported) {
             throw new Error('DPAPI module not available');
         }
 
@@ -516,7 +519,7 @@ class BrowserDecryptor {
         for (const method of methods) {
             try {
                 logger.debug(`Trying DPAPI decryption with ${method.description} for ${description}`);
-                const decrypted = dpapi.unprotectData(encryptedData, null, method.context);
+                const decrypted = Dpapi.unprotectData(encryptedData, null, method.context);
                 
                 if (returnBuffer) {
                     logger.debug(`DPAPI decryption successful with ${method.description} (${decrypted.length} bytes)`);
@@ -539,7 +542,7 @@ class BrowserDecryptor {
         // If all methods failed, try with different flags
         try {
             logger.debug('Trying DPAPI with CryptUnprotectData flags');
-            const decrypted = dpapi.unprotectData(encryptedData, null, 'CurrentUser');
+            const decrypted = Dpapi.unprotectData(encryptedData, null, 'CurrentUser');
             
             if (returnBuffer) {
                 return decrypted;
@@ -569,9 +572,9 @@ class BrowserDecryptor {
 
         // Check DPAPI availability
         try {
-            const dpapi = require('@primno/dpapi');
-            capabilities.dpapiAvailable = true;
-            capabilities.chromeV80Support = true;
+            const dpapiModule = require('@primno/dpapi');
+            capabilities.dpapiAvailable = dpapiModule.isPlatformSupported;
+            capabilities.chromeV80Support = dpapiModule.isPlatformSupported;
             capabilities.supportedBrowsers.push('Chrome (all versions)', 'Edge (all versions)', 'Brave', 'Opera');
         } catch (error) {
             capabilities.dpapiAvailable = false;
@@ -814,9 +817,7 @@ class BrowserDecryptor {
             // Create decipher with error handling
             let decipher;
             try {
-                decipher = crypto.createDecipherGCM('aes-256-gcm');
-                decipher.setKey(masterKey);
-                decipher.setIV(nonce);
+                decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, nonce);
                 decipher.setAuthTag(authTag);
             } catch (error) {
                 logger.debug(`Failed to create decipher: ${error.message}`);
