@@ -22,8 +22,8 @@
     "@primno/dpapi": "^2.0.1",
     "archiver": "^5.3.1",
     "axios": "^0.27.2",
-    "form-data": "^4.0.0",
-    "sqlite3": "^5.1.7"
+    "better-sqlite3": "^12.2.0",
+    "form-data": "^4.0.0"
   },
   "devDependencies": {
     "cross-env": "^10.0.0",

