@@ -204,6 +204,31 @@ class FileManager {
     }
 
     /**
+     * Save buffer data to file
+     * @param {Buffer} buffer - Buffer content
+     * @param {string} mainFolder - Main folder name in archive
+     * @param {string} fileName - File name
+     */
+    saveBuffer(buffer, mainFolder, fileName) {
+        this.ensureInitialized();
+
+        try {
+            const savePath = path.join(this.tempDir, mainFolder, fileName);
+
+            CoreUtils.createDirectoryRecursive(savePath);
+            fs.writeFileSync(savePath, buffer);
+
+            logger.debug(`Saved buffer data to ${mainFolder}/${fileName}`, {
+                size: `${(buffer.length / 1024).toFixed(2)} KB`
+            });
+            return true;
+        } catch (error) {
+            ErrorHandler.handle(error, null, { mainFolder, fileName });
+            return false;
+        }
+    }
+
+    /**
      * Copy file from source to destination
      * @param {string} sourcePath - Source file path
      * @param {string} destPath - Destination file path
