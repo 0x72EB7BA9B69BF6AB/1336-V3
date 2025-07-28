@@ -11,6 +11,9 @@ temp/
 *.exe
 *.zip
 
+# Test files
+test-*.js
+
 # Logs
 logs/
 *.log
