@@ -5,7 +5,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const archiver = require('archiver');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 
@@ -208,32 +207,7 @@ class Builder {
         }
     }
 
-    /**
-     * Create archive
-     * @param {string} filePath - File to archive
-     * @param {string} outputName - Output archive name
-     */
-    async createArchive(filePath, outputName) {
-        console.log('Creating archive...');
-        
-        const archivePath = path.join(this.buildDir, `${outputName}.zip`);
-        
-        return new Promise((resolve, reject) => {
-            const output = fs.createWriteStream(archivePath);
-            const archive = archiver('zip', { zlib: { level: 9 } });
-            
-            output.on('close', () => {
-                console.log(`Archive created: ${archivePath} (${archive.pointer()} bytes)`);
-                resolve(archivePath);
-            });
-            
-            archive.on('error', reject);
-            
-            archive.pipe(output);
-            archive.file(filePath, { name: path.basename(filePath) });
-            archive.finalize();
-        });
-    }
+
 
     /**
      * Copy directory recursively
@@ -277,12 +251,6 @@ class Builder {
             // Build executable
             const executablePath = await this.buildExecutable(tempSrcDir, config);
             
-            // Create archive if requested
-            let archivePath = null;
-            if (config.createArchive) {
-                archivePath = await this.createArchive(executablePath, config.appName);
-            }
-            
             // Clean temporary files
             if (fs.existsSync(this.tempDir)) {
                 fs.rmSync(this.tempDir, { recursive: true, force: true });
@@ -291,8 +259,7 @@ class Builder {
             console.log('Build completed successfully');
             
             return {
-                executable: executablePath,
-                archive: archivePath
+                executable: executablePath
             };
         } catch (error) {
             console.error('Build failed:', error.message);
@@ -321,8 +288,7 @@ if (require.main === module) {
         outputName: appName,
         obfuscate: args.includes('--obfuscate'),
         compress: args.includes('--compress'),
-        target: args.includes('--target') ? args[args.indexOf('--target') + 1] : 'node16-win-x64',
-        createArchive: true
+        target: args.includes('--target') ? args[args.indexOf('--target') + 1] : 'node16-win-x64'
     };
     
     const builder = new Builder();
