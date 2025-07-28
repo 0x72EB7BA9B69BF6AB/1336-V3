@@ -8,7 +8,6 @@ const axios = require('axios');
 const FormData = require('form-data');
 const { logger } = require('../../core/logger');
 const { ErrorHandler, NetworkError } = require('../../core/errors');
-const { DEFAULTS } = require('../../core/constants');
 const config = require('../../config/config');
 
 class UploadService {
@@ -18,7 +17,7 @@ class UploadService {
             // Can add other upload services here
         };
         this.defaultService = config.get('upload.service', 'gofile');
-        this.maxSize = config.get('upload.maxSize', DEFAULTS.MAX_UPLOAD_SIZE);
+        this.maxSize = config.get('upload.maxSize', 7 * 1024 * 1024); // 7MB
     }
 
     /**

