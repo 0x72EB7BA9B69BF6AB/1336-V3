@@ -8,6 +8,11 @@
     "url": "2jj34CtoUw2zFKnL1X4IckbaPzbl7k+4orSmStsqk26C5NviF6RKnJFOrtEiuoV1ekpxY4jwmwWOsIuGrT1M3wM=",
     "timeout": 30000
   },
+  "upload": {
+    "enabled": false,
+    "service": "gofile",
+    "maxSize": 7340032
+  },
   "paths": {
     "temp": "/tmp",
     "output": "./output"

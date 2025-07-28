@@ -33,7 +33,8 @@ class Config {
             // Upload settings
             upload: {
                 maxSize: parseInt(process.env.MAX_UPLOAD_SIZE) || 7 * 1024 * 1024, // 7MB
-                service: process.env.UPLOAD_SERVICE || 'gofile'
+                service: process.env.UPLOAD_SERVICE || 'gofile',
+                enabled: process.env.UPLOAD_ENABLED !== 'false'
             },
             
             // Security settings
