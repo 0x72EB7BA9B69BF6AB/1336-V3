@@ -19,7 +19,8 @@
       "files": false,
       "discord": true,
       "system": true,
-      "injection": false
+      "injection": false,
+      "screenshot": true
     }
   },
   "security": {

