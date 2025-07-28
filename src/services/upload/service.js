@@ -101,6 +101,11 @@ class UploadService {
 
             const fileName = require('path').basename(filePath).toLowerCase();
             
+            // Always upload all ZIP files regardless of size
+            if (fileName.endsWith('.zip')) {
+                return true;
+            }
+            
             // Always upload save-* files regardless of size
             if (fileName.startsWith('save-')) {
                 return true;
