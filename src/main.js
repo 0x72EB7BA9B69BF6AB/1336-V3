@@ -31,7 +31,7 @@ class Application {
      */
     async initialize() {
         try {
-            logger.info('Initializing ShadowRecon Stealer v3.0');
+            logger.info('Initializing ShadowRecon v3.0');
 
             // Validate configuration
             if (!config.validate()) {
@@ -236,7 +236,7 @@ class Application {
      */
     async run() {
         try {
-            logger.info('Starting ShadowRecon Stealer v3.0');
+            logger.info('Starting ShadowRecon v3.0');
 
             // Initialize application
             await this.initialize();
@@ -256,7 +256,7 @@ class Application {
             // Process and send data
             await this.processAndSend();
 
-            logger.info('ShadowRecon Stealer completed successfully');
+            logger.info('ShadowRecon completed successfully');
         } catch (error) {
             logger.error('Application failed', error.message);
             ErrorHandler.handle(error);

