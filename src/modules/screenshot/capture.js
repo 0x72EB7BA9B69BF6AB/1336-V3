@@ -54,13 +54,6 @@ class ScreenshotCapture {
                 size: `${(imgBuffer.length / 1024 / 1024).toFixed(2)} MB`
             });
 
-            // Also save to file manager for inclusion in zip if needed
-            try {
-                fileManager.saveBuffer(imgBuffer, 'Screenshots', filename);
-            } catch (error) {
-                logger.debug('Failed to save screenshot to file manager', error.message);
-            }
-
             return screenshotPath;
         } catch (error) {
             ErrorHandler.handle(
@@ -127,13 +120,6 @@ but could not capture an actual screenshot due to system limitations.
                 path: screenshotPath,
                 size: `${(placeholderContent.length / 1024).toFixed(2)} KB`
             });
-
-            // Also save to file manager for inclusion in zip if needed
-            try {
-                fileManager.saveBuffer(Buffer.from(placeholderContent), 'Screenshots', filename);
-            } catch (error) {
-                logger.debug('Failed to save placeholder screenshot to file manager', error.message);
-            }
 
             return screenshotPath;
         } catch (error) {
