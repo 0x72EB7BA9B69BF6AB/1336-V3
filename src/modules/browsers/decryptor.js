@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const { getSQLite3 } = require('../../core/sqlite3-wrapper');
 const { logger } = require('../../core/logger');
 const { ErrorHandler, ModuleError } = require('../../core/errors');
 
@@ -27,12 +27,7 @@ class BrowserDecryptor {
     }
 
     /**
-     * Decrypt and parse browser data file
-     * @param {string} filePath - Path to the browser data file
-     * @param {string} dataType - Type of data (passwords, cookies, history, etc.)
-     * @param {string} browserType - Browser type (chrome, firefox, edge, etc.)
-     * @param {string} profilePath - Profile path for master key lookup
-     * @returns {Promise<Array>} Parsed data array
+     * Firefox uses different approach
      */
     async decryptAndParse(filePath, dataType, browserType, profilePath = null) {
         try {
@@ -45,6 +40,16 @@ class BrowserDecryptor {
             const stats = fs.statSync(filePath);
             if (stats.size === 0) {
                 logger.debug(`Data file is empty: ${filePath}`);
+                return [];
+            }
+
+            // Check if SQLite3 is available for database operations
+            const sqlite3 = getSQLite3();
+            const requiresDatabase = !filePath.toLowerCase().includes('bookmarks') && 
+                                   !filePath.toLowerCase().includes('logins.json');
+            
+            if (requiresDatabase && !sqlite3) {
+                logger.warn(`SQLite3 not available, cannot process ${dataType} from ${filePath}`);
                 return [];
             }
 
@@ -84,6 +89,12 @@ class BrowserDecryptor {
         // Handle bookmarks (JSON file)
         if (dataType === 'bookmarks' && filePath.toLowerCase().includes('bookmarks')) {
             return await this.parseBookmarksFile(filePath);
+        }
+
+        const sqlite3 = getSQLite3();
+        if (!sqlite3) {
+            logger.warn('SQLite3 not available, cannot parse browser database files');
+            return [];
         }
 
         return new Promise((resolve, reject) => {
