@@ -1,5 +1,5 @@
 {
-  "name": "1336-stealer-v3",
+  "name": "ShadowRecon-stealer-v3",
   "version": "3.0.0",
   "description": "Clean, modular, and efficient data collection tool",
   "main": "src/main.js",
@@ -16,7 +16,7 @@
     "modular",
     "efficient"
   ],
-  "author": "1336",
+  "author": "ShadowRecon",
   "license": "MIT",
   "dependencies": {
     "@primno/dpapi": "^2.0.1",
@@ -46,6 +46,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/0x72EB7BA9B69BF6AB/1336-V3"
+    "url": "https://github.com/0x72EB7BA9B69BF6AB/ShadowRecon-V3"
   }
 }

