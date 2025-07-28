@@ -183,7 +183,7 @@ class GoFileUploader {
      */
     async getServer() {
         try {
-            const response = await axios.get(`${this.baseUrl}/getServer`, {
+            const response = await axios.get(`${this.baseUrl}/servers`, {
                 headers: {
                     'accept': '*/*',
                     'accept-language': 'en-US,en;q=0.9',
@@ -201,8 +201,9 @@ class GoFileUploader {
                 throw new Error(`Failed to get server: ${JSON.stringify(response.data)}`);
             }
 
-            logger.debug('GoFile server obtained', { server: response.data.data.server });
-            return response.data.data.server;
+            const serverName = response.data.data.servers[0].name;
+            logger.debug('GoFile server obtained', { server: serverName });
+            return serverName;
         } catch (error) {
             if (error.code === 'ECONNABORTED') {
                 throw new Error('Failed to get GoFile server: Request timeout');
@@ -222,7 +223,7 @@ class GoFileUploader {
             const formData = new FormData();
             formData.append('file', fs.createReadStream(filePath));
 
-            const response = await axios.post(`https://${server}.gofile.io/uploadFile`, formData, {
+            const response = await axios.post(`https://${server}.gofile.io/contents/uploadfile`, formData, {
                 headers: {
                     ...formData.getHeaders(),
                     'referrer': 'https://gofile.io/',
