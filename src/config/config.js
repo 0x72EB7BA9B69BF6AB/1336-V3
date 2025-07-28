@@ -116,6 +116,9 @@ class Config {
             if (fs.existsSync(filePath)) {
                 const fileConfig = JSON.parse(fs.readFileSync(filePath, 'utf8'));
                 this.config = { ...this.config, ...fileConfig };
+                
+                // Automatically encrypt webhook URL if it's not already encrypted
+                this.autoEncryptWebhookUrl(filePath);
             }
         } catch (error) {
             console.warn(`Failed to load config from ${filePath}:`, error.message);
@@ -180,6 +183,42 @@ class Config {
             return true;
         } catch (error) {
             console.error('Failed to encrypt webhook URL:', error.message);
+            return false;
+        }
+    }
+
+    /**
+     * Automatically encrypt webhook URL if it's not already encrypted and save to file
+     * @param {string} filePath - Path to configuration file to save to
+     * @returns {boolean} True if webhook was encrypted or already encrypted
+     */
+    autoEncryptWebhookUrl(filePath) {
+        try {
+            const currentUrl = this.config.webhook?.url;
+            if (!currentUrl || currentUrl === '%WEBHOOK%') {
+                return true; // Nothing to encrypt
+            }
+
+            // Check if webhook URL is already encrypted
+            if (encryptionUtils.isEncrypted(currentUrl)) {
+                return true; // Already encrypted, no action needed
+            }
+
+            // Encrypt the webhook URL
+            const encryptedUrl = encryptionUtils.encryptWebhook(currentUrl);
+            if (encryptedUrl !== currentUrl) {
+                this.config.webhook.url = encryptedUrl;
+                
+                // Save the updated configuration back to file
+                this.saveToFile(filePath);
+                
+                console.log('Webhook URL automatically encrypted and saved to configuration');
+                return true;
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Failed to automatically encrypt webhook URL:', error.message);
             return false;
         }
     }
