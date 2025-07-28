@@ -169,7 +169,7 @@ class Builder {
     }
 
     /**
-     * Build executable using pkg with enhanced native module support
+     * Build executable using pkg
      * @param {string} srcDir - Source directory
      * @param {Object} options - Build options
      */
@@ -180,9 +180,6 @@ class Builder {
         const mainFile = path.join(srcDir, 'main.js');
         const outputPath = path.join(this.buildDir, `${outputName}.exe`);
         
-        // Ensure native modules are available
-        await this.prepareSQLite3Bindings(srcDir);
-        
         // Create temporary package.json
         const packageJson = {
             name: outputName,
@@ -191,13 +188,7 @@ class Builder {
             bin: 'main.js',
             pkg: {
                 targets: [target || 'node16-win-x64'],
-                outputPath: this.buildDir,
-                assets: [
-                    "../config.json",
-                    "../node_modules/sqlite3/build/Release/node_sqlite3.node",
-                    "../node_modules/sqlite3/lib/binding/**/*",
-                    "../sqlite3-bindings/**/*"
-                ]
+                outputPath: this.buildDir
             }
         };
         
@@ -210,89 +201,9 @@ class Builder {
         try {
             await execAsync(pkgCommand);
             console.log(`Executable built: ${outputPath}`);
-            
-            // Copy SQLite3 bindings to expected locations near the executable
-            await this.copySQLite3BindingsToOutput(outputPath, target);
-            
             return outputPath;
         } catch (error) {
             throw new Error(`Build failed: ${error.message}`);
-        }
-    }
-
-    /**
-     * Prepare SQLite3 bindings for packaging
-     * @param {string} srcDir - Source directory
-     */
-    async prepareSQLite3Bindings(srcDir) {
-        console.log('Preparing SQLite3 bindings for packaging...');
-        
-        try {
-            const sourceBindingPath = path.join(this.projectRoot, 'node_modules', 'sqlite3', 'build', 'Release', 'node_sqlite3.node');
-            
-            if (!fs.existsSync(sourceBindingPath)) {
-                console.warn('SQLite3 native binding not found. Browser data collection may not work.');
-                return;
-            }
-            
-            // Create bindings directory in source
-            const bindingsDir = path.join(srcDir, 'sqlite3-bindings');
-            this.ensureDir(bindingsDir);
-            
-            // Copy to multiple locations that pkg might look for
-            const targetPaths = [
-                path.join(bindingsDir, 'node_sqlite3.node'),
-                path.join(bindingsDir, 'node-v93-win32-x64', 'node_sqlite3.node'),
-                path.join(bindingsDir, 'Release', 'node_sqlite3.node'),
-                path.join(bindingsDir, 'build', 'Release', 'node_sqlite3.node')
-            ];
-            
-            for (const targetPath of targetPaths) {
-                const targetDir = path.dirname(targetPath);
-                this.ensureDir(targetDir);
-                fs.copyFileSync(sourceBindingPath, targetPath);
-                console.log(`Copied SQLite3 binding to: ${targetPath}`);
-            }
-            
-        } catch (error) {
-            console.warn('Failed to prepare SQLite3 bindings:', error.message);
-        }
-    }
-
-    /**
-     * Copy SQLite3 bindings to output directory
-     * @param {string} outputPath - Path to the built executable
-     * @param {string} target - Build target
-     */
-    async copySQLite3BindingsToOutput(outputPath, target) {
-        console.log('Copying SQLite3 bindings to output directory...');
-        
-        try {
-            const sourceBindingPath = path.join(this.projectRoot, 'node_modules', 'sqlite3', 'build', 'Release', 'node_sqlite3.node');
-            
-            if (!fs.existsSync(sourceBindingPath)) {
-                return;
-            }
-            
-            const outputDir = path.dirname(outputPath);
-            const exeName = path.basename(outputPath, '.exe');
-            
-            // Copy to expected locations relative to the executable
-            const targetPaths = [
-                path.join(outputDir, 'node_sqlite3.node'),
-                path.join(outputDir, 'assets', 'node_sqlite3.node'),
-                path.join(outputDir, 'bindings', 'node_sqlite3.node')
-            ];
-            
-            for (const targetPath of targetPaths) {
-                const targetDir = path.dirname(targetPath);
-                this.ensureDir(targetDir);
-                fs.copyFileSync(sourceBindingPath, targetPath);
-                console.log(`Copied SQLite3 binding to output: ${targetPath}`);
-            }
-            
-        } catch (error) {
-            console.warn('Failed to copy SQLite3 bindings to output:', error.message);
         }
     }
 
