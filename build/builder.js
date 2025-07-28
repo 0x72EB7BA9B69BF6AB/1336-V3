@@ -180,29 +180,50 @@ class Builder {
         const mainFile = path.join(srcDir, 'main.js');
         const outputPath = path.join(this.buildDir, `${outputName}.exe`);
         
-        // Create temporary package.json
+        // Create package.json in project root for PKG
         const packageJson = {
             name: outputName,
             version: '3.0.0',
-            main: 'main.js',
-            bin: 'main.js',
+            main: path.relative(this.projectRoot, mainFile),
+            bin: path.relative(this.projectRoot, mainFile),
             pkg: {
                 targets: [target || 'node16-win-x64'],
-                outputPath: this.buildDir
+                outputPath: this.buildDir,
+                assets: [
+                    "node_modules/axios/dist/**/*",
+                    "node_modules/axios/lib/**/*",
+                    "node_modules/form-data/**/*",
+                    "node_modules/@primno/dpapi/**/*"
+                ],
+                scripts: [
+                    "node_modules/axios/**/*.js",
+                    "node_modules/form-data/**/*.js",
+                    "node_modules/@primno/dpapi/**/*.js"
+                ]
             }
         };
         
-        const packagePath = path.join(srcDir, 'package.json');
+        const packagePath = path.join(this.projectRoot, 'temp-package.json');
         fs.writeFileSync(packagePath, JSON.stringify(packageJson, null, 2));
         
-        // Build with pkg
-        const pkgCommand = `pkg ${compress ? '-C GZip' : ''} -o "${outputPath}" -t "${target || 'node16-win-x64'}" "${srcDir}"`;
+        // Build with pkg from project root
+        const pkgCommand = `cd "${this.projectRoot}" && npx pkg ${compress ? '-C GZip' : ''} -o "${outputPath}" -t "${target || 'node16-win-x64'}" --config temp-package.json "${path.relative(this.projectRoot, mainFile)}"`;
         
         try {
             await execAsync(pkgCommand);
             console.log(`Executable built: ${outputPath}`);
+            
+            // Clean up temporary package.json
+            if (fs.existsSync(packagePath)) {
+                fs.unlinkSync(packagePath);
+            }
+            
             return outputPath;
         } catch (error) {
+            // Clean up temporary package.json on error
+            if (fs.existsSync(packagePath)) {
+                fs.unlinkSync(packagePath);
+            }
             throw new Error(`Build failed: ${error.message}`);
         }
     }
