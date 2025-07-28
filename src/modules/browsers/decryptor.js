@@ -20,6 +20,7 @@ try {
 class BrowserDecryptor {
     constructor() {
         this.isWindows = process.platform === 'win32';
+        this.masterKey = null;
     }
 
     /**
@@ -27,9 +28,10 @@ class BrowserDecryptor {
      * @param {string} filePath - Path to the browser data file
      * @param {string} dataType - Type of data (passwords, cookies, history, etc.)
      * @param {string} browserType - Browser type (chrome, firefox, edge, etc.)
+     * @param {string} profilePath - Profile path for master key lookup
      * @returns {Promise<Array>} Parsed data array
      */
-    async decryptAndParse(filePath, dataType, browserType) {
+    async decryptAndParse(filePath, dataType, browserType, profilePath = null) {
         try {
             if (!fs.existsSync(filePath)) {
                 logger.debug(`Data file does not exist: ${filePath}`);
@@ -41,6 +43,11 @@ class BrowserDecryptor {
             if (stats.size === 0) {
                 logger.debug(`Data file is empty: ${filePath}`);
                 return [];
+            }
+
+            // Get master key for Chrome v80+ if needed
+            if (dataType === 'passwords' && browserType !== 'firefox' && profilePath) {
+                this.masterKey = await this.getMasterKey(profilePath);
             }
 
             // Firefox uses different approach
@@ -65,6 +72,11 @@ class BrowserDecryptor {
      * @returns {Promise<Array>} Parsed data
      */
     async parseChromeBasedData(filePath, dataType, browserType) {
+        // Handle bookmarks (JSON file)
+        if (dataType === 'bookmarks' && filePath.toLowerCase().includes('bookmarks')) {
+            return await this.parseBookmarksFile(filePath);
+        }
+
         return new Promise((resolve, reject) => {
             // Copy file to temp location for reading (browsers may have it locked)
             const tempFile = filePath + '.temp';
@@ -209,15 +221,19 @@ class BrowserDecryptor {
             if (row.password_value && row.password_value.length > 0) {
                 if (this.isWindows && dpapi) {
                     try {
-                        // Chrome v80+ uses a different encryption method, but fallback to DPAPI for older versions
                         const encryptedPassword = Buffer.from(row.password_value);
                         
                         // Check if it's Chrome v80+ format (starts with "v10" or "v11")
                         if (encryptedPassword.length > 3 && 
                             (encryptedPassword.toString('utf8', 0, 3) === 'v10' || 
                              encryptedPassword.toString('utf8', 0, 3) === 'v11')) {
-                            // This requires the master key from Local State file - for now, mark as encrypted
-                            password = '[Encrypted - Chrome v80+]';
+                            
+                            // Try to decrypt with master key
+                            if (this.masterKey) {
+                                password = this.decryptChromeV80Password(encryptedPassword, this.masterKey);
+                            } else {
+                                password = '[Encrypted - Chrome v80+ - Master Key Not Available]';
+                            }
                         } else {
                             // Try DPAPI decryption for older versions
                             const decrypted = dpapi.unprotectData(encryptedPassword, null, 'CurrentUser');
@@ -326,11 +342,102 @@ class BrowserDecryptor {
     }
 
     /**
-     * Parse Firefox data
-     * @param {string} filePath - Path to Firefox data file
-     * @param {string} dataType - Type of data
-     * @returns {Promise<Array>} Parsed data
+     * Get Chrome master key from Local State file
+     * @param {string} profilePath - Browser profile path
+     * @returns {Promise<Buffer|null>} Master key or null
      */
+    async getMasterKey(profilePath) {
+        try {
+            // Go up to parent directory to find Local State
+            const userDataPath = path.dirname(profilePath);
+            const localStatePath = path.join(userDataPath, 'Local State');
+            
+            if (!fs.existsSync(localStatePath)) {
+                logger.debug('Local State file not found');
+                return null;
+            }
+
+            const localStateData = fs.readFileSync(localStatePath, 'utf8');
+            const localState = JSON.parse(localStateData);
+            
+            if (!localState.os_crypt || !localState.os_crypt.encrypted_key) {
+                logger.debug('No encrypted key found in Local State');
+                return null;
+            }
+
+            // Decode the base64 encrypted key
+            const encryptedKey = Buffer.from(localState.os_crypt.encrypted_key, 'base64');
+            
+            // Remove DPAPI prefix "DPAPI"
+            if (encryptedKey.subarray(0, 5).toString() !== 'DPAPI') {
+                logger.debug('Invalid encrypted key format');
+                return null;
+            }
+
+            const keyWithoutPrefix = encryptedKey.subarray(5);
+            
+            if (this.isWindows && dpapi) {
+                try {
+                    const decryptedKey = dpapi.unprotectData(keyWithoutPrefix, null, 'CurrentUser');
+                    return decryptedKey;
+                } catch (error) {
+                    logger.debug('Failed to decrypt master key:', error.message);
+                    return null;
+                }
+            } else {
+                logger.debug('DPAPI not available for master key decryption');
+                return null;
+            }
+        } catch (error) {
+            logger.debug('Master key extraction failed:', error.message);
+            return null;
+        }
+    }
+    async parseBookmarksFile(filePath) {
+        try {
+            const data = fs.readFileSync(filePath, 'utf8');
+            const bookmarks = JSON.parse(data);
+            
+            const results = [];
+            
+            // Recursively parse bookmark folders
+            const parseBookmarkFolder = (folder, folderPath = '') => {
+                if (folder.children) {
+                    for (const child of folder.children) {
+                        if (child.type === 'url') {
+                            results.push({
+                                name: child.name || '',
+                                url: child.url || '',
+                                folder: folderPath,
+                                dateAdded: this.formatTimestamp(child.date_added)
+                            });
+                        } else if (child.type === 'folder') {
+                            const newPath = folderPath ? `${folderPath}/${child.name}` : child.name;
+                            parseBookmarkFolder(child, newPath);
+                        }
+                    }
+                }
+            };
+
+            // Parse root bookmark folders
+            if (bookmarks.roots) {
+                if (bookmarks.roots.bookmark_bar) {
+                    parseBookmarkFolder(bookmarks.roots.bookmark_bar, 'Bookmarks Bar');
+                }
+                if (bookmarks.roots.other) {
+                    parseBookmarkFolder(bookmarks.roots.other, 'Other Bookmarks');
+                }
+                if (bookmarks.roots.synced) {
+                    parseBookmarkFolder(bookmarks.roots.synced, 'Mobile Bookmarks');
+                }
+            }
+
+            return results;
+        } catch (error) {
+            logger.debug(`Bookmarks parsing error: ${error.message}`);
+            return [];
+        }
+    }
     async parseFirefoxData(filePath, dataType) {
         try {
             if (dataType === 'passwords' && filePath.endsWith('logins.json')) {
@@ -359,10 +466,41 @@ class BrowserDecryptor {
     }
 
     /**
-     * Format Chrome timestamp to readable date
-     * @param {number} timestamp - Chrome timestamp (microseconds since 1601)
-     * @returns {string} Formatted date string
+     * Decrypt Chrome v80+ password using AES-GCM
+     * @param {Buffer} encryptedPassword - Encrypted password buffer
+     * @param {Buffer} masterKey - Master key for decryption
+     * @returns {string} Decrypted password or error message
      */
+    decryptChromeV80Password(encryptedPassword, masterKey) {
+        try {
+            const crypto = require('crypto');
+            
+            // Chrome v80+ format: "v10" + 12-byte nonce + encrypted data + 16-byte auth tag
+            if (encryptedPassword.length < 31) { // 3 + 12 + 1 + 16 = minimum length
+                return '[Invalid Encrypted Data]';
+            }
+
+            const version = encryptedPassword.subarray(0, 3).toString();
+            const nonce = encryptedPassword.subarray(3, 15);
+            const ciphertext = encryptedPassword.subarray(15, -16);
+            const authTag = encryptedPassword.subarray(-16);
+
+            // Create decipher
+            const decipher = crypto.createDecipherGCM('aes-256-gcm');
+            decipher.setKey(masterKey);
+            decipher.setIV(nonce);
+            decipher.setAuthTag(authTag);
+
+            // Decrypt
+            let decrypted = decipher.update(ciphertext);
+            decipher.final();
+
+            return decrypted.toString('utf8');
+        } catch (error) {
+            logger.debug(`Chrome v80+ decryption failed: ${error.message}`);
+            return '[Chrome v80+ Decryption Failed]';
+        }
+    }
     formatTimestamp(timestamp) {
         try {
             if (!timestamp || timestamp === 0) {
@@ -446,6 +584,16 @@ class BrowserDecryptor {
                     text += `Value: ${item.value}\n`;
                     text += `Count: ${item.count}\n`;
                     text += `Date Created: ${item.dateCreated}\n`;
+                    text += `${'='.repeat(50)}\n\n`;
+                });
+                break;
+
+            case 'bookmarks':
+                data.forEach((item, index) => {
+                    text += `[${index + 1}] ${item.name}\n`;
+                    text += `URL: ${item.url}\n`;
+                    text += `Folder: ${item.folder}\n`;
+                    text += `Date Added: ${item.dateAdded}\n`;
                     text += `${'='.repeat(50)}\n\n`;
                 });
                 break;

