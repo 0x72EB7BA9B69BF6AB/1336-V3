@@ -5,15 +5,11 @@
 
 const fs = require('fs');
 const path = require('path');
+const { LOG_LEVELS, DEFAULTS } = require('./constants');
 
 class Logger {
     constructor(options = {}) {
-        this.levels = {
-            ERROR: 0,
-            WARN: 1,
-            INFO: 2,
-            DEBUG: 3
-        };
+        this.levels = LOG_LEVELS;
 
         this.currentLevel = options.level || this.levels.INFO;
         this.enableConsole = options.console !== false;
