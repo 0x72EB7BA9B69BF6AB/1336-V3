@@ -47,7 +47,13 @@ class BrowserDecryptor {
 
             // Get master key for Chrome v80+ if needed
             if (dataType === 'passwords' && browserType !== 'firefox' && profilePath) {
+                logger.debug(`Attempting to get master key for ${browserType} from ${profilePath}`);
                 this.masterKey = await this.getMasterKey(profilePath);
+                if (this.masterKey) {
+                    logger.debug(`Master key obtained for ${browserType} (${this.masterKey.length} bytes)`);
+                } else {
+                    logger.debug(`No master key available for ${browserType}`);
+                }
             }
 
             // Firefox uses different approach
@@ -209,7 +215,7 @@ class BrowserDecryptor {
     }
 
     /**
-     * Process password row and decrypt password
+     * Process password row and decrypt password with enhanced error recovery
      * @param {Object} row - Database row
      * @param {string} browserType - Browser type
      * @returns {Object} Processed password data
@@ -222,6 +228,7 @@ class BrowserDecryptor {
                 if (this.isWindows && dpapi) {
                     try {
                         const encryptedPassword = Buffer.from(row.password_value);
+                        logger.debug(`Processing password for ${browserType}, encrypted length: ${encryptedPassword.length} bytes`);
                         
                         // Check if it's Chrome v80+ format (starts with "v10" or "v11")
                         if (encryptedPassword.length > 3 && 
@@ -232,6 +239,13 @@ class BrowserDecryptor {
                             if (this.masterKey) {
                                 logger.debug(`Attempting Chrome v80+ decryption for ${browserType}`);
                                 password = this.decryptChromeV80Password(encryptedPassword, this.masterKey);
+                                
+                                // Check if decryption actually worked (not an error message)
+                                if (password.startsWith('[') && password.endsWith(']')) {
+                                    logger.debug(`Chrome v80+ decryption failed with message: ${password}`);
+                                } else {
+                                    logger.debug(`Chrome v80+ decryption successful for ${browserType}`);
+                                }
                             } else {
                                 password = '[Encrypted - Chrome v80+ - Master Key Not Available]';
                                 logger.debug(`Master key not available for ${browserType} v80+ decryption`);
@@ -242,6 +256,7 @@ class BrowserDecryptor {
                                 logger.debug(`Attempting DPAPI decryption for ${browserType}`);
                                 // Use the enhanced DPAPI decryption method
                                 password = this.tryDpapiDecryption(encryptedPassword, browserType);
+                                logger.debug(`DPAPI decryption successful for ${browserType}`);
                             } catch (dpapiError) {
                                 password = '[DPAPI Decryption Failed]';
                                 logger.debug(`DPAPI decryption failed for ${browserType}:`, dpapiError.message);
@@ -253,20 +268,33 @@ class BrowserDecryptor {
                     }
                 } else if (!this.isWindows) {
                     password = '[Encrypted - Non-Windows System]';
+                    logger.debug('Non-Windows system detected, DPAPI not available');
                 } else {
                     password = '[DPAPI Module Not Available]';
+                    logger.debug('DPAPI module not available');
                 }
+            } else {
+                password = '[No Password Data]';
+                logger.debug('No password data found in database row');
             }
 
-            return {
+            const result = {
                 url: row.origin_url || '',
                 username: row.username_value || '',
                 password: password,
                 dateCreated: this.formatTimestamp(row.date_created)
             };
+            
+            logger.debug(`Processed password entry for ${result.url} - Username: ${result.username}, Password status: ${password.startsWith('[') ? 'encrypted/failed' : 'decrypted'}`);
+            return result;
         } catch (error) {
             logger.debug(`Password processing error: ${error.message}`);
-            return null;
+            return {
+                url: row.origin_url || '',
+                username: row.username_value || '',
+                password: '[Processing Error]',
+                dateCreated: this.formatTimestamp(row.date_created)
+            };
         }
     }
 
@@ -523,6 +551,52 @@ class BrowserDecryptor {
         }
 
         throw lastError || new Error('All DPAPI decryption methods failed');
+    }
+
+    /**
+     * Get decryption capabilities and status
+     * @returns {Object} Decryption capabilities info
+     */
+    getDecryptionCapabilities() {
+        const capabilities = {
+            platform: process.platform,
+            isWindows: this.isWindows,
+            dpapiAvailable: false,
+            chromeV80Support: false,
+            firefoxNssSupport: false,
+            supportedBrowsers: []
+        };
+
+        // Check DPAPI availability
+        try {
+            const dpapi = require('@primno/dpapi');
+            capabilities.dpapiAvailable = true;
+            capabilities.chromeV80Support = true;
+            capabilities.supportedBrowsers.push('Chrome (all versions)', 'Edge (all versions)', 'Brave', 'Opera');
+        } catch (error) {
+            capabilities.dpapiAvailable = false;
+            capabilities.supportedBrowsers.push('Chrome (limited)', 'Edge (limited)');
+        }
+
+        // Firefox NSS support (basic implementation available)
+        capabilities.firefoxNssSupport = true;
+        capabilities.supportedBrowsers.push('Firefox (basic NSS support)');
+
+        return capabilities;
+    }
+
+    /**
+     * Log decryption capabilities for debugging
+     */
+    logDecryptionCapabilities() {
+        const caps = this.getDecryptionCapabilities();
+        logger.info('Browser Decryption Capabilities:', {
+            platform: caps.platform,
+            dpapiAvailable: caps.dpapiAvailable,
+            chromeV80Support: caps.chromeV80Support,
+            firefoxNssSupport: caps.firefoxNssSupport,
+            supportedBrowsers: caps.supportedBrowsers
+        });
     }
 
     async parseBookmarksFile(filePath) {
