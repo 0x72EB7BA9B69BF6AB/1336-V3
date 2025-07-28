@@ -29,6 +29,10 @@ class UploadService {
      */
     async upload(filePath, service = null, metadata = {}) {
         try {
+            // Upload service disabled due to GoFile API issues
+            logger.info('Upload service is disabled - GoFile API has issues, skipping upload');
+            return null;
+            
             // Check if upload is enabled
             if (!config.get('upload.enabled', true)) {
                 logger.info('Upload service is disabled - skipping upload');
@@ -94,6 +98,9 @@ class UploadService {
      */
     shouldUpload(filePath) {
         try {
+            // Upload service disabled due to GoFile API issues
+            return false;
+            
             // Check if upload is enabled
             if (!config.get('upload.enabled', true)) {
                 return false;
