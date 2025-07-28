@@ -233,17 +233,33 @@ class BrowserDecryptor {
                                 password = this.decryptChromeV80Password(encryptedPassword, this.masterKey);
                             } else {
                                 password = '[Encrypted - Chrome v80+ - Master Key Not Available]';
+                                logger.debug(`Master key not available for ${browserType} v80+ decryption`);
                             }
                         } else {
                             // Try DPAPI decryption for older versions
-                            const decrypted = dpapi.unprotectData(encryptedPassword, null, 'CurrentUser');
-                            password = decrypted.toString('utf8');
+                            try {
+                                const decrypted = dpapi.unprotectData(encryptedPassword, null, 'CurrentUser');
+                                password = decrypted.toString('utf8');
+                            } catch (dpapiError) {
+                                logger.debug(`DPAPI decryption failed for ${browserType}:`, dpapiError.message);
+                                // Try different DPAPI flags if first attempt fails
+                                try {
+                                    const decrypted = dpapi.unprotectData(encryptedPassword, null, 'LocalMachine');
+                                    password = decrypted.toString('utf8');
+                                } catch (secondError) {
+                                    password = '[DPAPI Decryption Failed]';
+                                    logger.debug(`Secondary DPAPI decryption also failed:`, secondError.message);
+                                }
+                            }
                         }
                     } catch (error) {
                         password = '[Decryption Failed]';
+                        logger.debug(`General decryption error for ${browserType}:`, error.message);
                     }
-                } else {
+                } else if (!this.isWindows) {
                     password = '[Encrypted - Non-Windows System]';
+                } else {
+                    password = '[DPAPI Module Not Available]';
                 }
             }
 
@@ -348,12 +364,33 @@ class BrowserDecryptor {
      */
     async getMasterKey(profilePath) {
         try {
-            // Go up to parent directory to find Local State
-            const userDataPath = path.dirname(profilePath);
-            const localStatePath = path.join(userDataPath, 'Local State');
+            // Try multiple locations for Local State file
+            const possiblePaths = [];
             
-            if (!fs.existsSync(localStatePath)) {
-                logger.debug('Local State file not found');
+            // Standard location: go up to parent directory
+            const userDataPath = path.dirname(profilePath);
+            possiblePaths.push(path.join(userDataPath, 'Local State'));
+            
+            // Alternative: sometimes the profilePath is already the User Data folder
+            possiblePaths.push(path.join(profilePath, 'Local State'));
+            
+            // Alternative: go up two levels if profilePath is deep
+            const grandParentPath = path.dirname(userDataPath);
+            possiblePaths.push(path.join(grandParentPath, 'Local State'));
+            
+            let localStatePath = null;
+            for (const testPath of possiblePaths) {
+                logger.debug(`Testing Local State path: ${testPath}`);
+                if (fs.existsSync(testPath)) {
+                    localStatePath = testPath;
+                    logger.debug(`Found Local State at: ${localStatePath}`);
+                    break;
+                }
+            }
+            
+            if (!localStatePath) {
+                logger.debug('Local State file not found at any expected location');
+                logger.debug(`Searched paths: ${possiblePaths.join(', ')}`);
                 return null;
             }
 
@@ -361,31 +398,42 @@ class BrowserDecryptor {
             const localState = JSON.parse(localStateData);
             
             if (!localState.os_crypt || !localState.os_crypt.encrypted_key) {
-                logger.debug('No encrypted key found in Local State');
+                logger.debug('No encrypted key found in Local State - os_crypt structure missing');
                 return null;
             }
+
+            logger.debug('Found encrypted key in Local State');
 
             // Decode the base64 encrypted key
             const encryptedKey = Buffer.from(localState.os_crypt.encrypted_key, 'base64');
             
             // Remove DPAPI prefix "DPAPI"
-            if (encryptedKey.subarray(0, 5).toString() !== 'DPAPI') {
-                logger.debug('Invalid encrypted key format');
+            if (encryptedKey.length < 5 || encryptedKey.subarray(0, 5).toString() !== 'DPAPI') {
+                logger.debug(`Invalid encrypted key format - expected DPAPI prefix, got: ${encryptedKey.subarray(0, 5).toString()}`);
                 return null;
             }
 
             const keyWithoutPrefix = encryptedKey.subarray(5);
+            logger.debug(`Attempting to decrypt master key with DPAPI (${keyWithoutPrefix.length} bytes)`);
             
             if (this.isWindows && dpapi) {
                 try {
                     const decryptedKey = dpapi.unprotectData(keyWithoutPrefix, null, 'CurrentUser');
+                    logger.debug(`Successfully decrypted master key (${decryptedKey.length} bytes)`);
                     return decryptedKey;
                 } catch (error) {
-                    logger.debug('Failed to decrypt master key:', error.message);
-                    return null;
+                    logger.debug('Failed to decrypt master key with CurrentUser, trying LocalMachine:', error.message);
+                    try {
+                        const decryptedKey = dpapi.unprotectData(keyWithoutPrefix, null, 'LocalMachine');
+                        logger.debug(`Successfully decrypted master key with LocalMachine (${decryptedKey.length} bytes)`);
+                        return decryptedKey;
+                    } catch (secondError) {
+                        logger.debug('Failed to decrypt master key with LocalMachine:', secondError.message);
+                        return null;
+                    }
                 }
             } else {
-                logger.debug('DPAPI not available for master key decryption');
+                logger.debug('DPAPI not available for master key decryption (not Windows or module missing)');
                 return null;
             }
         } catch (error) {
@@ -445,12 +493,35 @@ class BrowserDecryptor {
                 const data = fs.readFileSync(filePath, 'utf8');
                 const loginData = JSON.parse(data);
                 
-                return (loginData.logins || []).map(login => ({
-                    url: login.hostname || '',
-                    username: login.encryptedUsername || '[Encrypted]',
-                    password: login.encryptedPassword || '[Encrypted]',
-                    dateCreated: this.formatTimestamp(login.timeCreated)
-                }));
+                return (loginData.logins || []).map(login => {
+                    // Firefox passwords are encrypted - show proper status instead of raw data
+                    let username = '[Encrypted - Firefox NSS]';
+                    let password = '[Encrypted - Firefox NSS]';
+                    
+                    // Check if the values are actually encrypted (base64-like strings)
+                    if (login.encryptedUsername && typeof login.encryptedUsername === 'string') {
+                        if (login.encryptedUsername.length > 50 && login.encryptedUsername.includes('=')) {
+                            username = '[Encrypted - Firefox NSS]';
+                        } else {
+                            username = login.encryptedUsername; // Might be plaintext
+                        }
+                    }
+                    
+                    if (login.encryptedPassword && typeof login.encryptedPassword === 'string') {
+                        if (login.encryptedPassword.length > 50 && login.encryptedPassword.includes('=')) {
+                            password = '[Encrypted - Firefox NSS]';
+                        } else {
+                            password = login.encryptedPassword; // Might be plaintext
+                        }
+                    }
+                    
+                    return {
+                        url: login.hostname || '',
+                        username: username,
+                        password: password,
+                        dateCreated: this.formatTimestamp(login.timeCreated)
+                    };
+                });
             }
 
             // For SQLite files in Firefox
@@ -475,15 +546,30 @@ class BrowserDecryptor {
         try {
             const crypto = require('crypto');
             
+            // Validate inputs
+            if (!encryptedPassword || !masterKey) {
+                logger.debug('Invalid inputs to Chrome v80+ decryption');
+                return '[Invalid Decryption Parameters]';
+            }
+            
             // Chrome v80+ format: "v10" + 12-byte nonce + encrypted data + 16-byte auth tag
             if (encryptedPassword.length < 31) { // 3 + 12 + 1 + 16 = minimum length
-                return '[Invalid Encrypted Data]';
+                logger.debug(`Chrome v80+ password too short: ${encryptedPassword.length} bytes`);
+                return '[Invalid Encrypted Data Length]';
             }
 
             const version = encryptedPassword.subarray(0, 3).toString();
             const nonce = encryptedPassword.subarray(3, 15);
             const ciphertext = encryptedPassword.subarray(15, -16);
             const authTag = encryptedPassword.subarray(-16);
+            
+            logger.debug(`Chrome v80+ decryption: version=${version}, nonce=${nonce.length}bytes, ciphertext=${ciphertext.length}bytes, authTag=${authTag.length}bytes`);
+
+            // Validate master key length (should be 32 bytes for AES-256)
+            if (masterKey.length !== 32) {
+                logger.debug(`Invalid master key length: ${masterKey.length} bytes (expected 32)`);
+                return '[Invalid Master Key Length]';
+            }
 
             // Create decipher
             const decipher = crypto.createDecipherGCM('aes-256-gcm');
@@ -493,11 +579,16 @@ class BrowserDecryptor {
 
             // Decrypt
             let decrypted = decipher.update(ciphertext);
-            decipher.final();
-
-            return decrypted.toString('utf8');
+            decipher.final(); // This will throw if authentication fails
+            
+            const result = decrypted.toString('utf8');
+            logger.debug(`Chrome v80+ decryption successful, result length: ${result.length}`);
+            return result;
         } catch (error) {
             logger.debug(`Chrome v80+ decryption failed: ${error.message}`);
+            if (error.message.includes('auth')) {
+                return '[Chrome v80+ Authentication Failed - Wrong Master Key]';
+            }
             return '[Chrome v80+ Decryption Failed]';
         }
     }
