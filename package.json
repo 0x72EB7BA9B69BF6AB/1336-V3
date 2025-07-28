@@ -1,5 +1,5 @@
 {
-  "name": "ShadowRecon-stealer-v3",
+  "name": "ShadowRecon",
   "version": "3.0.0",
   "description": "Clean, modular, and efficient data collection tool",
   "main": "src/main.js",

@@ -1,4 +1,4 @@
-# 🔥 ShadowRecon Stealer V3 - Modular Edition
+# 🔥 ShadowRecon V3 - Modular Edition
 
 A completely restructured, clean, modular, and efficient data collection tool with professional architecture.
 
