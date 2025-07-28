@@ -118,6 +118,9 @@ class BrowserCollector {
      */
     async collect() {
         logger.info('Starting browser data collection');
+        
+        // Log decryption capabilities
+        this.decryptor.logDecryptionCapabilities();
 
         try {
             const results = {};
