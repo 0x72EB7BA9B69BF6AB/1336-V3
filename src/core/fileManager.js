@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
 const SevenZip = require('node-7z');
+const sevenBin = require('7zip-bin');
 const CoreUtils = require('./utils');
 const { logger } = require('./logger');
 const { ErrorHandler, FileSystemError } = require('./errors');
@@ -299,10 +300,14 @@ class FileManager {
     async createPasswordProtectedZip(password) {
         return new Promise((resolve, reject) => {
             try {
-                // Use 7-Zip to create password-protected archive
+                // Ensure the 7z binary has execute permissions
+                this.ensureBinaryPermissions();
+                
+                // Use 7-Zip to create password-protected archive with proper binary path
                 const sevenZip = SevenZip.add(this.zipPath, `${this.tempDir}${path.sep}*`, {
                     password: password,
-                    recursive: true
+                    recursive: true,
+                    $bin: sevenBin.path7za // Use the 7z binary from 7zip-bin package
                 });
 
                 sevenZip.on('end', () => {
@@ -317,6 +322,24 @@ class FileManager {
                 reject(new FileSystemError(`Failed to create password-protected archive: ${error.message}`));
             }
         });
+    }
+
+    /**
+     * Ensure the 7z binary has execute permissions
+     */
+    ensureBinaryPermissions() {
+        try {
+            if (process.platform !== 'win32') {
+                // On Unix-like systems, ensure the binary is executable
+                const binaryPath = sevenBin.path7za;
+                if (fs.existsSync(binaryPath)) {
+                    fs.chmodSync(binaryPath, '755');
+                    logger.debug('7z binary permissions ensured', { path: binaryPath });
+                }
+            }
+        } catch (error) {
+            logger.warn('Failed to set binary permissions', error.message);
+        }
     }
 
     /**
