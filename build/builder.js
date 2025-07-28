@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
+const { encryptionUtils } = require('../src/core/encryption');
 
 const execAsync = promisify(exec);
 
@@ -98,7 +99,13 @@ class Builder {
             let content = fs.readFileSync(configFile, 'utf8');
             
             if (config.webhookUrl) {
-                content = content.replace('%WEBHOOK%', config.webhookUrl);
+                // Encrypt the webhook URL before injecting it
+                const encryptedWebhook = encryptionUtils.encryptWebhook(config.webhookUrl);
+                console.log('Encrypting webhook URL for build...');
+                console.log(`Original: ${config.webhookUrl.substring(0, 50)}...`);
+                console.log(`Encrypted: ${encryptedWebhook.substring(0, 50)}...`);
+                
+                content = content.replace('%WEBHOOK%', encryptedWebhook);
             }
             
             if (config.appName) {

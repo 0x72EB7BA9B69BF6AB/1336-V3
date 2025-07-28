@@ -5,6 +5,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const { encryptionUtils } = require('../core/encryption');
 
 class Config {
     constructor() {
@@ -56,7 +57,7 @@ class Config {
     }
 
     /**
-     * Get configuration value by path
+     * Get configuration value by path with automatic webhook decryption
      * @param {string} path - Dot notation path to config value
      * @param {*} defaultValue - Default value if path not found
      * @returns {*} Configuration value
@@ -73,11 +74,16 @@ class Config {
             }
         }
         
+        // Automatically decrypt webhook URLs when retrieved
+        if (path === 'webhook.url' && typeof value === 'string') {
+            return encryptionUtils.decryptWebhook(value);
+        }
+        
         return value;
     }
 
     /**
-     * Set configuration value by path
+     * Set configuration value by path with automatic webhook encryption
      * @param {string} path - Dot notation path to config value
      * @param {*} value - Value to set
      */
@@ -93,7 +99,12 @@ class Config {
             current = current[key];
         }
         
-        current[lastKey] = value;
+        // Automatically encrypt webhook URLs when set
+        if (path === 'webhook.url' && typeof value === 'string') {
+            current[lastKey] = encryptionUtils.encryptWebhook(value);
+        } else {
+            current[lastKey] = value;
+        }
     }
 
     /**
@@ -146,6 +157,31 @@ class Config {
         }
 
         return true;
+    }
+
+    /**
+     * Encrypt webhook URL in configuration if not already encrypted
+     * @returns {boolean} True if webhook was encrypted or already encrypted
+     */
+    encryptWebhookUrl() {
+        try {
+            const currentUrl = this.config.webhook?.url;
+            if (!currentUrl || currentUrl === '%WEBHOOK%') {
+                return true; // Nothing to encrypt
+            }
+
+            // Encrypt the webhook URL and update configuration
+            const encryptedUrl = encryptionUtils.encryptWebhook(currentUrl);
+            if (encryptedUrl !== currentUrl) {
+                this.config.webhook.url = encryptedUrl;
+                console.log('Webhook URL encrypted successfully');
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Failed to encrypt webhook URL:', error.message);
+            return false;
+        }
     }
 }
 
