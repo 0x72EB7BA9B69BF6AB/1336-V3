@@ -5,16 +5,10 @@
   "main": "src/main.js",
   "scripts": {
     "start": "node src/main.js",
-    "dev": "cross-env NODE_ENV=development node src/main.js",
     "build": "node build/builder.js",
-    "clean": "rimraf dist temp output node_modules/.cache",
+    "dev": "cross-env NODE_ENV=development node src/main.js",
     "test": "echo \"No tests specified\" && exit 0",
-    "lint": "echo \"No linting configured yet\" && exit 0",
-    "format": "echo \"No formatting configured yet\" && exit 0",
-    "validate": "node validate.js",
-    "validate:syntax": "node -c src/main.js && echo \"Syntax validation passed\"",
-    "install:clean": "npm ci",
-    "version": "echo \"ShadowRecon v$(node -p \"require('./package.json').version\")\""
+    "lint": "echo \"No linting configured\" && exit 0"
   },
   "keywords": [
     "stealer",
@@ -34,8 +28,7 @@
   "devDependencies": {
     "cross-env": "^10.0.0",
     "js-confuser": "^1.5.4",
-    "pkg": "^5.8.1",
-    "rimraf": "^3.0.2"
+    "pkg": "^5.8.1"
   },
   "engines": {
     "node": ">=14.0.0"

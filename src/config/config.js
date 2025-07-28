@@ -5,22 +5,21 @@
 
 const path = require('path');
 const fs = require('fs');
-const { DEFAULTS, APP_INFO } = require('../core/constants');
 
 class Config {
     constructor() {
         this.config = {
             // Application settings
             app: {
-                name: process.env.APP_NAME || APP_INFO.NAME,
-                version: process.env.APP_VERSION || APP_INFO.VERSION,
+                name: process.env.APP_NAME || 'client',
+                version: process.env.APP_VERSION || '1.0.0',
                 environment: process.env.NODE_ENV || 'development'
             },
             
             // Webhook configuration
             webhook: {
                 url: process.env.WEBHOOK_URL || '%WEBHOOK%',
-                timeout: parseInt(process.env.WEBHOOK_TIMEOUT) || DEFAULTS.WEBHOOK_TIMEOUT
+                timeout: parseInt(process.env.WEBHOOK_TIMEOUT) || 30000
             },
             
             // File paths
@@ -32,7 +31,7 @@ class Config {
             
             // Upload settings
             upload: {
-                maxSize: parseInt(process.env.MAX_UPLOAD_SIZE) || DEFAULTS.MAX_UPLOAD_SIZE,
+                maxSize: parseInt(process.env.MAX_UPLOAD_SIZE) || 7 * 1024 * 1024, // 7MB
                 service: process.env.UPLOAD_SERVICE || 'gofile'
             },
             
@@ -133,32 +132,6 @@ class Config {
      * @returns {boolean} True if configuration is valid
      */
     validate() {
-        try {
-            const { ConfigValidator } = require('../core/configValidator');
-            const validation = ConfigValidator.validate(this.config);
-            
-            if (!validation.valid) {
-                console.error('Configuration validation failed:', validation.errors.join(', '));
-                return false;
-            }
-            
-            if (validation.warnings.length > 0) {
-                console.warn('Configuration warnings:', validation.warnings.join(', '));
-            }
-            
-            return true;
-        } catch (error) {
-            // Fallback to simple validation if validator fails
-            console.warn('Advanced validation failed, using fallback validation');
-            return this.validateSimple();
-        }
-    }
-
-    /**
-     * Simple fallback validation
-     * @returns {boolean} True if basic configuration is valid
-     */
-    validateSimple() {
         const required = [
             'app.name',
             'webhook.url',
