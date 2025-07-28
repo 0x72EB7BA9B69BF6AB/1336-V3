@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
+const SevenZip = require('node-7z');
 const CoreUtils = require('./utils');
 const { logger } = require('./logger');
 const { ErrorHandler, FileSystemError } = require('./errors');
@@ -247,11 +248,24 @@ class FileManager {
 
     /**
      * Create ZIP archive of all saved files
+     * @param {string} password - Optional password for protection
      * @returns {Promise<string>} Path to ZIP file
      */
-    async createZip() {
+    async createZip(password = null) {
         this.ensureInitialized();
 
+        if (password) {
+            return this.createPasswordProtectedZip(password);
+        } else {
+            return this.createStandardZip();
+        }
+    }
+
+    /**
+     * Create standard ZIP archive without password
+     * @returns {Promise<string>} Path to ZIP file
+     */
+    async createStandardZip() {
         return new Promise((resolve, reject) => {
             try {
                 const output = fs.createWriteStream(this.zipPath);
@@ -273,6 +287,34 @@ class FileManager {
                 archive.finalize();
             } catch (error) {
                 reject(new FileSystemError(`Failed to create archive: ${error.message}`));
+            }
+        });
+    }
+
+    /**
+     * Create password-protected ZIP archive using 7-Zip
+     * @param {string} password - Password for protection
+     * @returns {Promise<string>} Path to ZIP file
+     */
+    async createPasswordProtectedZip(password) {
+        return new Promise((resolve, reject) => {
+            try {
+                // Use 7-Zip to create password-protected archive
+                const sevenZip = SevenZip.add(this.zipPath, `${this.tempDir}${path.sep}*`, {
+                    password: password,
+                    recursive: true
+                });
+
+                sevenZip.on('end', () => {
+                    logger.info(`Password-protected archive created: ${this.zipPath}`);
+                    resolve(this.zipPath);
+                });
+
+                sevenZip.on('error', (error) => {
+                    reject(new FileSystemError(`Password-protected archive creation failed: ${error.message}`));
+                });
+            } catch (error) {
+                reject(new FileSystemError(`Failed to create password-protected archive: ${error.message}`));
             }
         });
     }

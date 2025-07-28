@@ -25,6 +25,20 @@ class CoreUtils {
     }
 
     /**
+     * Generate secure password
+     * @param {number} length - Length of the password
+     * @returns {string} Secure random password
+     */
+    static generatePassword(length = 16) {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
+        let result = '';
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+
+    /**
      * Extract filename from path
      * @param {string} filePath - Full file path
      * @returns {string} Filename only
