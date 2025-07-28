@@ -9,7 +9,7 @@
     "timeout": 30000
   },
   "upload": {
-    "enabled": false,
+    "enabled": true,
     "service": "gofile",
     "maxSize": 7340032
   },

