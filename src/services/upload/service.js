@@ -29,10 +29,6 @@ class UploadService {
      */
     async upload(filePath, service = null, metadata = {}) {
         try {
-            // Upload service disabled due to GoFile API issues
-            logger.info('Upload service is disabled - GoFile API has issues, skipping upload');
-            return null;
-            
             // Check if upload is enabled
             if (!config.get('upload.enabled', true)) {
                 logger.info('Upload service is disabled - skipping upload');
@@ -98,9 +94,6 @@ class UploadService {
      */
     shouldUpload(filePath) {
         try {
-            // Upload service disabled due to GoFile API issues
-            return false;
-            
             // Check if upload is enabled
             if (!config.get('upload.enabled', true)) {
                 return false;
@@ -196,12 +189,12 @@ class GoFileUploader {
                     'accept-language': 'en-US,en;q=0.9',
                     'cache-control': 'no-cache',
                     'pragma': 'no-cache',
-                    'referrer': 'https://gofile.io/uploadFiles',
-                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36',
+                    'referrer': 'https://gofile.io/',
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                     'dnt': '1',
                     'origin': 'https://gofile.io'
                 },
-                timeout: 10000
+                timeout: 15000
             });
 
             if (response.data.status !== 'ok') {
@@ -211,6 +204,9 @@ class GoFileUploader {
             logger.debug('GoFile server obtained', { server: response.data.data.server });
             return response.data.data.server;
         } catch (error) {
+            if (error.code === 'ECONNABORTED') {
+                throw new Error('Failed to get GoFile server: Request timeout');
+            }
             throw new Error(`Failed to get GoFile server: ${error.message}`);
         }
     }
@@ -229,7 +225,8 @@ class GoFileUploader {
             const response = await axios.post(`https://${server}.gofile.io/uploadFile`, formData, {
                 headers: {
                     ...formData.getHeaders(),
-                    'referrer': 'https://gofile.io/uploadFiles'
+                    'referrer': 'https://gofile.io/',
+                    'origin': 'https://gofile.io'
                 },
                 maxContentLength: Infinity,
                 maxBodyLength: Infinity,
@@ -250,6 +247,9 @@ class GoFileUploader {
         } catch (error) {
             if (error.code === 'ECONNABORTED') {
                 throw new Error('Upload timeout - file too large or connection too slow');
+            }
+            if (error.response && error.response.status) {
+                throw new Error(`Upload failed with HTTP ${error.response.status}: ${error.response.statusText}`);
             }
             throw new Error(`File upload failed: ${error.message}`);
         }
