@@ -21,7 +21,7 @@ class UploadService {
     }
 
     /**
-     * Upload file using configured service
+     * Upload file using configured service with fallback handling
      * @param {string} filePath - Path to file to upload
      * @param {string} service - Service to use (optional)
      * @param {Object} metadata - Additional metadata (password, etc.)
@@ -29,6 +29,12 @@ class UploadService {
      */
     async upload(filePath, service = null, metadata = {}) {
         try {
+            // Check if upload is enabled
+            if (!config.get('upload.enabled', true)) {
+                logger.info('Upload service is disabled - skipping upload');
+                return null;
+            }
+
             if (!fs.existsSync(filePath)) {
                 throw new Error(`File does not exist: ${filePath}`);
             }
@@ -57,7 +63,12 @@ class UploadService {
 
             return result;
         } catch (error) {
-            throw new NetworkError(`Upload failed: ${error.message}`);
+            logger.warn('Upload failed - continuing without upload', {
+                error: error.message,
+                file: filePath
+            });
+            // Don't throw error, just return null to indicate upload failed
+            return null;
         }
     }
 
@@ -83,6 +94,11 @@ class UploadService {
      */
     shouldUpload(filePath) {
         try {
+            // Check if upload is enabled
+            if (!config.get('upload.enabled', true)) {
+                return false;
+            }
+
             const fileName = require('path').basename(filePath).toLowerCase();
             
             // Always upload save-* files regardless of size
