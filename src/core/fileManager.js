@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
+const archiverZipEncrypted = require("archiver-zip-encrypted");
 const CoreUtils = require('./utils');
 const { logger } = require('./logger');
 const { ErrorHandler, FileSystemError } = require('./errors');
@@ -221,7 +222,7 @@ class FileManager {
     }
 
     /**
-     * Create ZIP archive of all saved files
+     * Create ZIP archive of all saved files with password protection
      * @returns {Promise<string>} Path to ZIP file
      */
     async createZip() {
@@ -230,12 +231,24 @@ class FileManager {
         return new Promise((resolve, reject) => {
             try {
                 const output = fs.createWriteStream(this.zipPath);
-                const archive = archiver('zip', {
-                    zlib: { level: 9 }
+                
+                // Register the encrypted zip format
+                archiver.registerFormat('zip-encrypted', archiverZipEncrypted);
+                
+                // Get password from config
+                const password = config.get('archive.password', 'ShadowRecon2024!');
+                const encryption = config.get('archive.encryption', 'aes256');
+                
+                // Create encrypted archive
+                const archive = archiver('zip-encrypted', {
+                    zlib: { level: 9 },
+                    encryptionMethod: encryption,
+                    password: password
                 });
 
                 output.on('close', () => {
-                    logger.info(`Archive created: ${this.zipPath} (${archive.pointer()} bytes)`);
+                    logger.info(`Password-protected archive created: ${this.zipPath} (${archive.pointer()} bytes)`);
+                    logger.debug(`Archive password: ${password}`);
                     resolve(this.zipPath);
                 });
 
@@ -308,6 +321,14 @@ class FileManager {
      */
     getZipPath() {
         return this.zipPath;
+    }
+
+    /**
+     * Get archive password
+     * @returns {string} Archive password
+     */
+    getArchivePassword() {
+        return config.get('archive.password', 'ShadowRecon2024!');
     }
 }
 

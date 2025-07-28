@@ -69,12 +69,21 @@ class UploadService {
     }
 
     /**
-     * Check if file should be uploaded based on size
+     * Check if file should be uploaded
+     * For save-**.zip files, always upload regardless of size
      * @param {string} filePath - Path to file
      * @returns {boolean} True if file should be uploaded
      */
     shouldUpload(filePath) {
         try {
+            const fileName = require('path').basename(filePath);
+            
+            // Always upload save-**.zip files regardless of size
+            if (fileName.match(/^save-.*\.zip$/i)) {
+                return true;
+            }
+            
+            // For other files, check size limit
             const fileSize = fs.statSync(filePath).size;
             return fileSize > this.maxSize;
         } catch (error) {

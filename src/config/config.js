@@ -32,7 +32,14 @@ class Config {
             // Upload settings
             upload: {
                 maxSize: parseInt(process.env.MAX_UPLOAD_SIZE) || 7 * 1024 * 1024, // 7MB
-                service: process.env.UPLOAD_SERVICE || 'gofile'
+                service: process.env.UPLOAD_SERVICE || 'gofile',
+                alwaysUpload: process.env.ALWAYS_UPLOAD === 'true' || true // Upload all save-**.zip files regardless of size
+            },
+            
+            // Archive settings
+            archive: {
+                password: process.env.ARCHIVE_PASSWORD || 'ShadowRecon2024!', // Default password for ZIP archives
+                encryption: process.env.ARCHIVE_ENCRYPTION || 'aes256' // Encryption method
             },
             
             // Security settings

