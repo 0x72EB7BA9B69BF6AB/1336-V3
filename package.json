@@ -21,7 +21,7 @@
   "dependencies": {
     "@primno/dpapi": "^2.0.1",
     "archiver": "^5.3.1",
-    "axios": "^0.27.2",
+    "axios": "^1.11.0",
     "better-sqlite3": "^12.2.0",
     "form-data": "^4.0.0"
   },
@@ -35,14 +35,19 @@
   },
   "pkg": {
     "assets": [
-      "config.json"
+      "config.json",
+      "node_modules/axios/dist/**/*",
+      "node_modules/axios/lib/**/*"
     ],
     "targets": [
       "node16-win-x64",
       "node16-linux-x64",
       "node16-macos-x64"
     ],
-    "outputPath": "dist"
+    "outputPath": "dist",
+    "scripts": [
+      "node_modules/axios/**/*.js"
+    ]
   },
   "repository": {
     "type": "git",
