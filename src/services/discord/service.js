@@ -590,7 +590,7 @@ This file indicates that the Discord module found tokens but couldn't process th
         // Format avatar URL
         const avatarUrl = account.avatar ? 
             `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.webp` : 
-            `https://cdn.discordapp.com/avatars/${account.id}/a_167f3d700c3a3ee2dacf27df15c932e5.webp`;
+            `https://cdn.discordapp.com/embed/avatars/0.png`;
         
         return {
             color: null,

