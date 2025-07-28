@@ -70,7 +70,7 @@ ENABLE_DISCORD=true
 ```json
 {
   "webhook": {
-    "url": "YOUR_WEBHOOK_URL"
+    "url": "https://discord.com/api/webhooks/YOUR_WEBHOOK_HERE"
   },
   "modules": {
     "enabled": {
@@ -82,6 +82,8 @@ ENABLE_DISCORD=true
   }
 }
 ```
+
+**Note:** You can use plain text webhook URLs - they will be automatically encrypted on first run!
 
 ## 🔨 Building
 
@@ -117,6 +119,22 @@ node build/builder.js <webhook> <name> --obfuscate --compress --target node16-wi
 
 ShadowRecon automatically encrypts webhook URLs to prevent them from being easily readable by malicious users:
 
+**🔥 Automatic Encryption on Startup**
+- Simply put your plain text webhook URL in `config.json`
+- The application will automatically encrypt it on first run
+- No manual encryption required! The webhook is secured automatically
+
+```json
+{
+  "webhook": {
+    "url": "https://discord.com/api/webhooks/YOUR_WEBHOOK_HERE"
+  }
+}
+```
+
+After first run, the webhook will be automatically encrypted in the config file.
+
+**Manual Webhook Management** (optional):
 ```bash
 # Utility for managing encrypted webhooks
 node webhook-util.js encrypt <webhook_url>     # Encrypt a webhook URL
@@ -125,11 +143,13 @@ node webhook-util.js show-config               # Show decrypted webhook from con
 node webhook-util.js encrypt-config            # Encrypt webhook in config.json
 ```
 
-The encryption:
+**Encryption Features:**
+- **Automatic encryption on startup** - No manual intervention needed
 - Uses AES-256-GCM encryption with system-derived keys
-- Is automatically applied during build process
-- Maintains backward compatibility with plain-text webhooks
+- Automatically applied during build process
+- Maintains backward compatibility with already-encrypted webhooks
 - Protects against casual inspection of configuration files
+- Transparent decryption when webhook is accessed by the application
 
 ## 📊 Statistics
 

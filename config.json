@@ -5,7 +5,7 @@
     "environment": "development"
   },
   "webhook": {
-    "url": "https://discord.com/api/webhooks/test/plain-text-webhook-url",
+    "url": "https://discord.com/api/webhooks/demo/plain-text-demo-webhook",
     "timeout": 30000
   },
   "paths": {
