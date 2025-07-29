@@ -75,16 +75,21 @@ class Config {
             }
         }
         
-        // Automatically decrypt webhook URLs when retrieved
+        // Automatically decrypt webhook URLs when retrieved (if they are encrypted)
         if (path === 'webhook.url' && typeof value === 'string') {
-            return encryptionUtils.decryptWebhook(value);
+            // Only decrypt if the value appears to be encrypted
+            if (encryptionUtils.isEncrypted(value)) {
+                return encryptionUtils.decryptWebhook(value);
+            }
+            // Return as-is if not encrypted (plain text URL)
+            return value;
         }
         
         return value;
     }
 
     /**
-     * Set configuration value by path with automatic webhook encryption
+     * Set configuration value by path (without automatic webhook encryption)
      * @param {string} path - Dot notation path to config value
      * @param {*} value - Value to set
      */
@@ -100,12 +105,10 @@ class Config {
             current = current[key];
         }
         
-        // Automatically encrypt webhook URLs when set
-        if (path === 'webhook.url' && typeof value === 'string') {
-            current[lastKey] = encryptionUtils.encryptWebhook(value);
-        } else {
-            current[lastKey] = value;
-        }
+        // Note: Removed automatic encryption for webhook URLs
+        // URLs are stored as-is in the configuration
+        // Decryption only happens at runtime when accessed via get()
+        current[lastKey] = value;
     }
 
     /**
@@ -118,8 +121,9 @@ class Config {
                 const fileConfig = JSON.parse(fs.readFileSync(filePath, 'utf8'));
                 this.config = { ...this.config, ...fileConfig };
                 
-                // Automatically encrypt webhook URL if it's not already encrypted
-                this.autoEncryptWebhookUrl(filePath);
+                // Note: Removed automatic encryption of webhook URL in config file
+                // The URL will remain in its original format in the config.json file
+                // Decryption still happens at runtime when the URL is accessed via get()
             }
         } catch (error) {
             console.warn(`Failed to load config from ${filePath}:`, error.message);

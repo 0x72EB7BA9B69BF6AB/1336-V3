@@ -102,9 +102,11 @@ class EmbedBuilder {
      */
     static createFileEmbed(ip, downloadUrl = null, password = null) {
         const embed = this.createBase({
+            title: ':package: File Download',
+            color: 5814783, // Blue color for download embeds
             fields: [
                 {
-                    name: ':earth_africa: IP',
+                    name: ':earth_africa: IP Address',
                     value: `\`${ip}\``,
                     inline: true
                 }
@@ -112,8 +114,16 @@ class EmbedBuilder {
         });
 
         if (downloadUrl) {
+            // Make download URL clickable by not wrapping in backticks
             embed.fields.push({
-                name: ':file_folder: Download',
+                name: ':link: Download Link',
+                value: `[Click here to download](${downloadUrl})`,
+                inline: false
+            });
+            
+            // Also add the raw URL for copying if needed
+            embed.fields.push({
+                name: ':clipboard: Direct URL',
                 value: `\`${downloadUrl}\``,
                 inline: false
             });
@@ -121,9 +131,9 @@ class EmbedBuilder {
 
         if (password) {
             embed.fields.push({
-                name: ':key: Password',
+                name: ':key: Archive Password',
                 value: `\`${password}\``,
-                inline: true
+                inline: false
             });
         }
 
