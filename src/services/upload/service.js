@@ -7,7 +7,6 @@ const fs = require('fs');
 const axios = require('axios');
 const FormData = require('form-data');
 const { logger } = require('../../core/logger');
-const { ErrorHandler, NetworkError } = require('../../core/errors');
 const config = require('../../config/config');
 
 class UploadService {
