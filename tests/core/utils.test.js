@@ -80,10 +80,10 @@ describe('CoreUtils', () => {
     describe('batchProcess', () => {
         test('should process items with concurrency limit', async () => {
             const items = [1, 2, 3, 4, 5];
-            const processor = async (item) => item * 2;
-            
+            const processor = async item => item * 2;
+
             const results = await CoreUtils.batchProcess(items, processor, 2);
-            
+
             expect(results).toHaveLength(5);
             results.forEach((result, index) => {
                 expect(result.success).toBe(true);
@@ -96,18 +96,19 @@ describe('CoreUtils', () => {
         test('should succeed on first try', async () => {
             const fn = jest.fn().mockResolvedValue('success');
             const result = await CoreUtils.retry(fn, 3);
-            
+
             expect(result).toBe('success');
             expect(fn).toHaveBeenCalledTimes(1);
         });
 
         test('should retry on failure', async () => {
-            const fn = jest.fn()
+            const fn = jest
+                .fn()
                 .mockRejectedValueOnce(new Error('fail'))
                 .mockResolvedValue('success');
-                
+
             const result = await CoreUtils.retry(fn, 3, 10);
-            
+
             expect(result).toBe('success');
             expect(fn).toHaveBeenCalledTimes(2);
         });

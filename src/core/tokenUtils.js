@@ -19,12 +19,9 @@ class TokenUtils {
         }
 
         const originalCount = tokens.length;
-        
+
         // Step 1: Remove null/undefined values
-        const cleanedTokens = tokens.filter(token => 
-            token !== null && 
-            token !== undefined
-        );
+        const cleanedTokens = tokens.filter(token => token !== null && token !== undefined);
 
         // Step 2: Ensure all tokens are strings and trim whitespace
         const trimmedTokens = cleanedTokens
@@ -38,7 +35,7 @@ class TokenUtils {
         const deduplicatedTokens = [...new Set(nonEmptyTokens)];
 
         const removedCount = originalCount - deduplicatedTokens.length;
-        
+
         if (removedCount > 0) {
             logger.debug('Token deduplication completed', {
                 originalCount,
@@ -67,12 +64,14 @@ class TokenUtils {
         if (trimmedToken.startsWith('mfa.') && trimmedToken.length > 20) {
             return true; // MFA tokens
         }
-        
+
         const parts = trimmedToken.split('.');
-        if (parts.length === 3 && 
-            parts[0].length >= 20 && 
-            parts[1].length >= 4 && 
-            parts[2].length >= 20) {
+        if (
+            parts.length === 3 &&
+            parts[0].length >= 20 &&
+            parts[1].length >= 4 &&
+            parts[2].length >= 20
+        ) {
             return true; // Standard 3-part tokens
         }
 
@@ -108,12 +107,14 @@ class TokenUtils {
      */
     static mergeAndDeduplicate(...tokenArrays) {
         const allTokens = [];
-        
+
         tokenArrays.forEach((tokenArray, index) => {
             if (Array.isArray(tokenArray)) {
                 allTokens.push(...tokenArray);
             } else {
-                logger.warn(`TokenUtils.mergeAndDeduplicate: Array ${index} is not an array`, { array: tokenArray });
+                logger.warn(`TokenUtils.mergeAndDeduplicate: Array ${index} is not an array`, {
+                    array: tokenArray
+                });
             }
         });
 
@@ -131,8 +132,14 @@ class TokenUtils {
             originalCount: originalTokens.length,
             deduplicatedCount: deduplicatedTokens.length,
             removedCount: originalTokens.length - deduplicatedTokens.length,
-            duplicatePercentage: originalTokens.length > 0 ? 
-                ((originalTokens.length - deduplicatedTokens.length) / originalTokens.length * 100).toFixed(2) : 0
+            duplicatePercentage:
+                originalTokens.length > 0
+                    ? (
+                          ((originalTokens.length - deduplicatedTokens.length) /
+                              originalTokens.length) *
+                          100
+                      ).toFixed(2)
+                    : 0
         };
     }
 }

