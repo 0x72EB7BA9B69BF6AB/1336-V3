@@ -1,9 +1,10 @@
 /**
- * File Management System
- * Handles file operations, saving, and archiving
+ * Enhanced File Management System
+ * Handles file operations, saving, and archiving with improved performance
  */
 
-const fs = require('fs');
+const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const archiver = require('archiver');
 const SevenZip = require('node-7z');
@@ -18,40 +19,124 @@ class FileManager {
         this.tempDir = null;
         this.zipPath = null;
         this.initialized = false;
+        this.fileOperationQueue = [];
+        this.processing = false;
+        this.stats = {
+            filesProcessed: 0,
+            totalSize: 0,
+            errors: 0
+        };
     }
 
     /**
      * Initialize file manager with temporary directory
      */
-    init() {
+    async init() {
         try {
             const tempBase = config.get('paths.temp');
             this.tempDir = path.join(tempBase, 'Save-' + CoreUtils.generateId(10));
             this.zipPath = path.join(tempBase, 'Save-' + CoreUtils.generateId(10) + '.zip');
 
-            if (fs.existsSync(this.tempDir)) {
-                fs.rmSync(this.tempDir, { recursive: true, force: true });
-            }
+            // Clean up existing directories
+            await this._cleanupExisting();
 
-            fs.mkdirSync(this.tempDir, { recursive: true });
-
-            if (fs.existsSync(this.zipPath)) {
-                fs.rmSync(this.zipPath);
-            }
+            // Create temp directory
+            await fs.mkdir(this.tempDir, { recursive: true });
 
             this.initialized = true;
-            logger.info('File manager initialized', { tempDir: this.tempDir, zipPath: this.zipPath });
+            this.stats = { filesProcessed: 0, totalSize: 0, errors: 0 };
+            
+            logger.info('File manager initialized', { 
+                tempDir: this.tempDir, 
+                zipPath: this.zipPath 
+            });
         } catch (error) {
             throw new FileSystemError(`Failed to initialize file manager: ${error.message}`);
         }
     }
 
     /**
+     * Clean up existing files and directories
+     * @private
+     */
+    async _cleanupExisting() {
+        const cleanupTasks = [];
+
+        if (await CoreUtils.fileExists(this.tempDir)) {
+            cleanupTasks.push(
+                fs.rm(this.tempDir, { recursive: true, force: true })
+                    .catch(error => logger.warn('Failed to cleanup temp dir:', error.message))
+            );
+        }
+
+        if (await CoreUtils.fileExists(this.zipPath)) {
+            cleanupTasks.push(
+                fs.rm(this.zipPath)
+                    .catch(error => logger.warn('Failed to cleanup zip file:', error.message))
+            );
+        }
+
+        await Promise.all(cleanupTasks);
+    }
+
+    /**
      * Ensure file manager is initialized
      */
-    ensureInitialized() {
+    async ensureInitialized() {
         if (!this.initialized) {
-            this.init();
+            await this.init();
+        }
+    }
+
+    /**
+     * Save files from source directory to organized structure (async)
+     * @param {string} sourcePath - Source directory path
+     * @param {string} mainFolder - Main folder name in archive
+     * @param {string} subFolder - Sub folder name in archive
+     * @param {number} concurrency - Number of concurrent operations
+     * @returns {Promise<Array<string>>} Array of saved file paths
+     */
+    async saveAsync(sourcePath, mainFolder, subFolder = '', concurrency = 10) {
+        await this.ensureInitialized();
+
+        try {
+            if (!(await CoreUtils.fileExists(sourcePath))) {
+                logger.warn(`Source path does not exist: ${sourcePath}`);
+                return [];
+            }
+
+            const files = CoreUtils.recursiveRead(sourcePath);
+            
+            // Batch process files for better performance
+            const copyTasks = files.map(file => ({
+                source: path.join(sourcePath, file),
+                target: path.join(this.tempDir, mainFolder, subFolder, file),
+                relativePath: subFolder ? 
+                    path.join(mainFolder, subFolder, file) : 
+                    path.join(mainFolder, file)
+            }));
+
+            const results = await CoreUtils.batchProcess(
+                copyTasks, 
+                async (task) => {
+                    const success = await this.copyFileAsync(task.source, task.target);
+                    return success ? task.relativePath : null;
+                }, 
+                concurrency
+            );
+
+            const saved = results
+                .filter(result => result.success && result.result)
+                .map(result => result.result);
+
+            logger.debug(`Saved ${saved.length} files from ${sourcePath} to ${mainFolder}/${subFolder}`);
+            this.stats.filesProcessed += saved.length;
+            
+            return saved;
+        } catch (error) {
+            this.stats.errors++;
+            ErrorHandler.handle(error, null, { sourcePath, mainFolder, subFolder });
+            return [];
         }
     }
 
@@ -94,7 +179,94 @@ class FileManager {
     }
 
     /**
-     * Save single file
+     * Save files from source directory to organized structure (defaults to async)
+     * @param {string} sourcePath - Source directory path
+     * @param {string} mainFolder - Main folder name in archive
+     * @param {string} subFolder - Sub folder name in archive
+     * @param {number} concurrency - Number of concurrent operations
+     * @returns {Promise<Array<string>>} Array of saved file paths
+     */
+    save(sourcePath, mainFolder, subFolder = '', concurrency = 10) {
+        return this.saveAsync(sourcePath, mainFolder, subFolder, concurrency);
+    }
+
+    /**
+     * Save files from source directory to organized structure (sync version)
+     * @param {string} sourcePath - Source directory path
+     * @param {string} mainFolder - Main folder name in archive
+     * @param {string} subFolder - Sub folder name in archive
+     * @returns {Array<string>} Array of saved file paths
+     */
+    saveSync(sourcePath, mainFolder, subFolder = '') {
+        this.ensureInitialized();
+
+        try {
+            if (!fsSync.existsSync(sourcePath)) {
+                logger.warn(`Source path does not exist: ${sourcePath}`);
+                return [];
+            }
+
+            const files = CoreUtils.recursiveRead(sourcePath);
+            const saved = [];
+
+            for (const file of files) {
+                const fullSourcePath = path.join(sourcePath, file);
+                const relativePath = subFolder ? 
+                    path.join(mainFolder, subFolder, file) : 
+                    path.join(mainFolder, file);
+                const savePath = path.join(this.tempDir, relativePath);
+
+                if (this.copyFile(fullSourcePath, savePath)) {
+                    saved.push(relativePath);
+                }
+            }
+
+            logger.debug(`Saved ${saved.length} files from ${sourcePath} to ${mainFolder}/${subFolder}`);
+            this.stats.filesProcessed += saved.length;
+            return saved;
+        } catch (error) {
+            this.stats.errors++;
+            ErrorHandler.handle(error, null, { sourcePath, mainFolder, subFolder });
+            return [];
+        }
+    }
+
+    /**
+     * Save single file (async)
+     * @param {string} sourcePath - Source file path
+     * @param {string} mainFolder - Main folder name in archive
+     * @param {string} fileName - File name in archive
+     * @returns {Promise<boolean>} Success status
+     */
+    async saveSingleAsync(sourcePath, mainFolder, fileName = null) {
+        await this.ensureInitialized();
+
+        try {
+            if (!(await CoreUtils.fileExists(sourcePath))) {
+                logger.warn(`Source file does not exist: ${sourcePath}`);
+                return false;
+            }
+
+            const targetFileName = fileName || CoreUtils.getFileName(sourcePath);
+            const savePath = path.join(this.tempDir, mainFolder, targetFileName);
+
+            const success = await this.copyFileAsync(sourcePath, savePath);
+            if (success) {
+                this.stats.filesProcessed++;
+                const size = await CoreUtils.getFileSize(sourcePath);
+                this.stats.totalSize += size;
+            }
+            
+            return success;
+        } catch (error) {
+            this.stats.errors++;
+            ErrorHandler.handle(error, null, { sourcePath, mainFolder, fileName });
+            return false;
+        }
+    }
+
+    /**
+     * Save single file (legacy sync version)
      * @param {string} sourcePath - Source file path
      * @param {string} mainFolder - Main folder name in archive
      * @param {string} fileName - File name in archive
@@ -103,7 +275,7 @@ class FileManager {
         this.ensureInitialized();
 
         try {
-            if (!fs.existsSync(sourcePath)) {
+            if (!fsSync.existsSync(sourcePath)) {
                 logger.warn(`Source file does not exist: ${sourcePath}`);
                 return false;
             }
@@ -111,15 +283,63 @@ class FileManager {
             const targetFileName = fileName || CoreUtils.getFileName(sourcePath);
             const savePath = path.join(this.tempDir, mainFolder, targetFileName);
 
-            return this.copyFile(sourcePath, savePath);
+            const success = this.copyFile(sourcePath, savePath);
+            if (success) {
+                this.stats.filesProcessed++;
+            }
+            
+            return success;
         } catch (error) {
+            this.stats.errors++;
             ErrorHandler.handle(error, null, { sourcePath, mainFolder, fileName });
             return false;
         }
     }
 
     /**
-     * Save array of files or directories
+     * Save array of files or directories (async)
+     * @param {Array<string>} sources - Array of source paths
+     * @param {string} mainFolder - Main folder name in archive
+     * @param {string} subFolder - Sub folder name in archive
+     * @param {number} concurrency - Number of concurrent operations
+     * @returns {Promise<Array<string>>} Array of saved file paths
+     */
+    async saveArrayAsync(sources, mainFolder, subFolder = '', concurrency = 5) {
+        await this.ensureInitialized();
+
+        const processTasks = sources.map(async (source) => {
+            try {
+                if (!(await CoreUtils.fileExists(source))) {
+                    return [];
+                }
+
+                const stat = await fs.lstat(source);
+                if (stat.isDirectory()) {
+                    return await this.saveAsync(source, mainFolder, subFolder, concurrency);
+                } else {
+                    const fileName = CoreUtils.getFileName(source);
+                    const success = await this.saveSingleAsync(source, mainFolder, fileName);
+                    const relativePath = subFolder ? 
+                        path.join(mainFolder, subFolder, fileName) : 
+                        path.join(mainFolder, fileName);
+                    return success ? [relativePath] : [];
+                }
+            } catch (error) {
+                this.stats.errors++;
+                ErrorHandler.handle(error, null, { source, mainFolder, subFolder });
+                return [];
+            }
+        });
+
+        const results = await Promise.all(processTasks);
+        const savedFiles = results.flat();
+
+        logger.debug(`Saved ${savedFiles.length} files from array to ${mainFolder}/${subFolder}`);
+        return savedFiles;
+    }
+
+    /**
+     * Save array of files or directories (legacy sync version)
      * @param {Array<string>} sources - Array of source paths
      * @param {string} mainFolder - Main folder name in archive
      * @param {string} subFolder - Sub folder name in archive
@@ -131,12 +351,12 @@ class FileManager {
 
         for (const source of sources) {
             try {
-                if (!fs.existsSync(source)) {
+                if (!fsSync.existsSync(source)) {
                     continue;
                 }
 
-                if (fs.lstatSync(source).isDirectory()) {
-                    const files = this.save(source, mainFolder, subFolder);
+                if (fsSync.lstatSync(source).isDirectory()) {
+                    const files = this.saveSync(source, mainFolder, subFolder);
                     savedFiles.push(...files);
                 } else {
                     const fileName = CoreUtils.getFileName(source);
@@ -150,6 +370,7 @@ class FileManager {
                     }
                 }
             } catch (error) {
+                this.stats.errors++;
                 ErrorHandler.handle(error, null, { source, mainFolder, subFolder });
             }
         }
@@ -159,7 +380,35 @@ class FileManager {
     }
 
     /**
-     * Save data as JSON file
+     * Save data as JSON file (async)
+     * @param {Object} data - Data to save
+     * @param {string} mainFolder - Main folder name in archive
+     * @param {string} fileName - File name
+     * @returns {Promise<boolean>} Success status
+     */
+    async saveJsonAsync(data, mainFolder, fileName) {
+        await this.ensureInitialized();
+
+        try {
+            const savePath = path.join(this.tempDir, mainFolder, fileName);
+            const jsonData = JSON.stringify(data, null, 2);
+
+            await CoreUtils.createDirectoryRecursiveAsync(savePath);
+            await fs.writeFile(savePath, jsonData);
+
+            logger.debug(`Saved JSON data to ${mainFolder}/${fileName}`);
+            this.stats.filesProcessed++;
+            this.stats.totalSize += Buffer.byteLength(jsonData);
+            return true;
+        } catch (error) {
+            this.stats.errors++;
+            ErrorHandler.handle(error, null, { mainFolder, fileName });
+            return false;
+        }
+    }
+
+    /**
+     * Save data as JSON file (legacy sync version)
      * @param {Object} data - Data to save
      * @param {string} mainFolder - Main folder name in archive
      * @param {string} fileName - File name
@@ -172,18 +421,48 @@ class FileManager {
             const jsonData = JSON.stringify(data, null, 2);
 
             CoreUtils.createDirectoryRecursive(savePath);
-            fs.writeFileSync(savePath, jsonData);
+            fsSync.writeFileSync(savePath, jsonData);
 
             logger.debug(`Saved JSON data to ${mainFolder}/${fileName}`);
+            this.stats.filesProcessed++;
+            this.stats.totalSize += Buffer.byteLength(jsonData);
             return true;
         } catch (error) {
+            this.stats.errors++;
             ErrorHandler.handle(error, null, { mainFolder, fileName });
             return false;
         }
     }
 
     /**
-     * Save text data to file
+     * Save text data to file (async)
+     * @param {string} text - Text content
+     * @param {string} mainFolder - Main folder name in archive
+     * @param {string} fileName - File name
+     * @returns {Promise<boolean>} Success status
+     */
+    async saveTextAsync(text, mainFolder, fileName) {
+        await this.ensureInitialized();
+
+        try {
+            const savePath = path.join(this.tempDir, mainFolder, fileName);
+
+            await CoreUtils.createDirectoryRecursiveAsync(savePath);
+            await fs.writeFile(savePath, text);
+
+            logger.debug(`Saved text data to ${mainFolder}/${fileName}`);
+            this.stats.filesProcessed++;
+            this.stats.totalSize += Buffer.byteLength(text);
+            return true;
+        } catch (error) {
+            this.stats.errors++;
+            ErrorHandler.handle(error, null, { mainFolder, fileName });
+            return false;
+        }
+    }
+
+    /**
+     * Save text data to file (legacy sync version)
      * @param {string} text - Text content
      * @param {string} mainFolder - Main folder name in archive
      * @param {string} fileName - File name
@@ -195,18 +474,50 @@ class FileManager {
             const savePath = path.join(this.tempDir, mainFolder, fileName);
 
             CoreUtils.createDirectoryRecursive(savePath);
-            fs.writeFileSync(savePath, text);
+            fsSync.writeFileSync(savePath, text);
 
             logger.debug(`Saved text data to ${mainFolder}/${fileName}`);
+            this.stats.filesProcessed++;
+            this.stats.totalSize += Buffer.byteLength(text);
             return true;
         } catch (error) {
+            this.stats.errors++;
             ErrorHandler.handle(error, null, { mainFolder, fileName });
             return false;
         }
     }
 
     /**
-     * Save buffer data to file
+     * Save buffer data to file (async)
+     * @param {Buffer} buffer - Buffer content
+     * @param {string} mainFolder - Main folder name in archive
+     * @param {string} fileName - File name
+     * @returns {Promise<boolean>} Success status
+     */
+    async saveBufferAsync(buffer, mainFolder, fileName) {
+        await this.ensureInitialized();
+
+        try {
+            const savePath = path.join(this.tempDir, mainFolder, fileName);
+
+            await CoreUtils.createDirectoryRecursiveAsync(savePath);
+            await fs.writeFile(savePath, buffer);
+
+            logger.debug(`Saved buffer data to ${mainFolder}/${fileName}`, {
+                size: `${(buffer.length / 1024).toFixed(2)} KB`
+            });
+            this.stats.filesProcessed++;
+            this.stats.totalSize += buffer.length;
+            return true;
+        } catch (error) {
+            this.stats.errors++;
+            ErrorHandler.handle(error, null, { mainFolder, fileName });
+            return false;
+        }
+    }
+
+    /**
+     * Save buffer data to file (legacy sync version)
      * @param {Buffer} buffer - Buffer content
      * @param {string} mainFolder - Main folder name in archive
      * @param {string} fileName - File name
@@ -218,20 +529,44 @@ class FileManager {
             const savePath = path.join(this.tempDir, mainFolder, fileName);
 
             CoreUtils.createDirectoryRecursive(savePath);
-            fs.writeFileSync(savePath, buffer);
+            fsSync.writeFileSync(savePath, buffer);
 
             logger.debug(`Saved buffer data to ${mainFolder}/${fileName}`, {
                 size: `${(buffer.length / 1024).toFixed(2)} KB`
             });
+            this.stats.filesProcessed++;
+            this.stats.totalSize += buffer.length;
             return true;
         } catch (error) {
+            this.stats.errors++;
             ErrorHandler.handle(error, null, { mainFolder, fileName });
             return false;
         }
     }
 
     /**
-     * Copy file from source to destination
+     * Copy file from source to destination (async)
+     * @param {string} sourcePath - Source file path
+     * @param {string} destPath - Destination file path
+     * @returns {Promise<boolean>} True if successful
+     */
+    async copyFileAsync(sourcePath, destPath) {
+        try {
+            await CoreUtils.createDirectoryRecursiveAsync(destPath);
+            await fs.copyFile(sourcePath, destPath);
+            
+            const size = await CoreUtils.getFileSize(destPath);
+            this.stats.totalSize += size;
+            
+            return true;
+        } catch (error) {
+            logger.warn(`Failed to copy file ${sourcePath} to ${destPath}:`, error.message);
+            return false;
+        }
+    }
+
+    /**
+     * Copy file from source to destination (legacy sync version)
      * @param {string} sourcePath - Source file path
      * @param {string} destPath - Destination file path
      * @returns {boolean} True if successful
@@ -239,12 +574,35 @@ class FileManager {
     copyFile(sourcePath, destPath) {
         try {
             CoreUtils.createDirectoryRecursive(destPath);
-            fs.copyFileSync(sourcePath, destPath);
+            fsSync.copyFileSync(sourcePath, destPath);
+            
+            const stats = fsSync.statSync(destPath);
+            this.stats.totalSize += stats.size;
+            
             return true;
         } catch (error) {
-            logger.debug(`Failed to copy file: ${sourcePath} -> ${destPath}`, error.message);
+            logger.warn(`Failed to copy file ${sourcePath} to ${destPath}:`, error.message);
             return false;
         }
+    }
+
+    /**
+     * Get file statistics
+     * @returns {Object} File operation statistics
+     */
+    getStats() {
+        return { ...this.stats };
+    }
+
+    /**
+     * Reset file statistics
+     */
+    resetStats() {
+        this.stats = {
+            filesProcessed: 0,
+            totalSize: 0,
+            errors: 0
+        };
     }
 
     /**
