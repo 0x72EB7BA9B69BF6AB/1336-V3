@@ -32,7 +32,6 @@ class BrowserCollector {
      * @returns {Object} Browser paths configuration
      */
     getBrowserPaths() {
-        const userProfile = process.env.USERPROFILE || '';
         const localAppData = process.env.LOCALAPPDATA || '';
         const appData = process.env.APPDATA || '';
 
@@ -255,24 +254,24 @@ class BrowserCollector {
                 
                 // Map data types to stats
                 switch (dataType) {
-                    case 'passwords':
-                        profileStats.passwords += count;
-                        break;
-                    case 'cookies':
-                        profileStats.cookies += count;
-                        break;
-                    case 'autofill':
-                        profileStats.autofills += count;
-                        break;
-                    case 'history':
-                        profileStats.history += count;
-                        break;
-                    case 'downloads':
-                        profileStats.downloads += count;
-                        break;
-                    case 'bookmarks':
-                        profileStats.bookmarks += count;
-                        break;
+                case 'passwords':
+                    profileStats.passwords += count;
+                    break;
+                case 'cookies':
+                    profileStats.cookies += count;
+                    break;
+                case 'autofill':
+                    profileStats.autofills += count;
+                    break;
+                case 'history':
+                    profileStats.history += count;
+                    break;
+                case 'downloads':
+                    profileStats.downloads += count;
+                    break;
+                case 'bookmarks':
+                    profileStats.bookmarks += count;
+                    break;
                 }
             } catch (error) {
                 logger.debug(`Failed to collect ${dataType} from ${profile.name}`, error.message);

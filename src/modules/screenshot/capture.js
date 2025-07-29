@@ -8,7 +8,6 @@ const path = require('path');
 const screenshot = require('screenshot-desktop');
 const { logger } = require('../../core/logger');
 const { ErrorHandler, ModuleError } = require('../../core/errors');
-const { fileManager } = require('../../core/fileManager');
 
 class ScreenshotCapture {
     constructor() {

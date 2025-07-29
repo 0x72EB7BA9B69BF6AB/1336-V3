@@ -51,7 +51,7 @@ class Logger {
 
         if (this.enableConsole) {
             const consoleMethod = level === this.levels.ERROR ? 'error' :
-                                level === this.levels.WARN ? 'warn' : 'log';
+                level === this.levels.WARN ? 'warn' : 'log';
             console[consoleMethod](logMessage);
         }
 
