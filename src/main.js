@@ -280,7 +280,7 @@ class Application {
                 const password = uploadResult.password || zipPassword;
                 if (password) {
                     embed.fields.push({
-                        name: ":key: Password",
+                        name: ':key: Password',
                         value: `\`${password}\``,
                         inline: true
                     });
@@ -294,7 +294,7 @@ class Application {
                 // Add password information if present
                 if (zipPassword) {
                     embed.fields.push({
-                        name: ":key: Password",
+                        name: ':key: Password',
                         value: `\`${zipPassword}\``,
                         inline: true
                     });

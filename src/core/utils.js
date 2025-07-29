@@ -11,31 +11,25 @@ const crypto = require('crypto');
 
 class CoreUtils {
     /**
-     * Generate random ID string
+     * Generate cryptographically secure random ID string
      * @param {number} length - Length of the ID
      * @returns {string} Random ID
      */
     static generateId(length = 10) {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        let result = '';
-        for (let i = 0; i < length; i++) {
-            result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return result;
+        const randomBytes = crypto.randomBytes(length);
+        return Array.from(randomBytes, byte => chars[byte % chars.length]).join('');
     }
 
     /**
-     * Generate secure password
+     * Generate cryptographically secure password
      * @param {number} length - Length of the password
      * @returns {string} Secure random password
      */
     static generatePassword(length = 16) {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
-        let result = '';
-        for (let i = 0; i < length; i++) {
-            result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return result;
+        const randomBytes = crypto.randomBytes(length);
+        return Array.from(randomBytes, byte => chars[byte % chars.length]).join('');
     }
 
     /**
@@ -48,30 +42,39 @@ class CoreUtils {
     }
 
     /**
-     * Recursively read all files in directory
+     * Recursively read all files in directory with optimized performance
      * @param {string} basePath - Base directory path
      * @param {string} relativePath - Relative path for results
+     * @param {Set} visited - Set to track visited directories (prevents infinite loops)
      * @returns {Array<string>} Array of file paths
      */
-    static recursiveRead(basePath, relativePath = '') {
+    static recursiveRead(basePath, relativePath = '', visited = new Set()) {
         const result = [];
         
-        if (!basePath.endsWith('\\') && !basePath.endsWith('/')) {
-            basePath += process.platform === 'win32' ? '\\' : '/';
+        // Normalize path separator
+        const separator = process.platform === 'win32' ? '\\' : '/';
+        if (!basePath.endsWith(separator)) {
+            basePath += separator;
         }
 
+        // Prevent infinite loops with symbolic links
+        const resolvedPath = fs.realpathSync.cache ? fs.realpathSync.cache[basePath] || basePath : basePath;
+        if (visited.has(resolvedPath)) {
+            return result;
+        }
+        visited.add(resolvedPath);
+
         try {
-            const files = fs.readdirSync(basePath);
+            const files = fs.readdirSync(basePath, { withFileTypes: true });
             
             for (const file of files) {
-                const filePath = basePath + file;
-                const relativeFilePath = relativePath + file;
+                const filePath = basePath + file.name;
+                const relativeFilePath = relativePath + file.name;
                 
                 try {
-                    if (fs.statSync(filePath).isDirectory()) {
-                        const separator = process.platform === 'win32' ? '\\' : '/';
-                        result.push(...this.recursiveRead(filePath, relativeFilePath + separator));
-                    } else {
+                    if (file.isDirectory()) {
+                        result.push(...this.recursiveRead(filePath, relativeFilePath + separator, visited));
+                    } else if (file.isFile()) {
                         result.push(relativeFilePath);
                     }
                 } catch (error) {
@@ -128,16 +131,59 @@ class CoreUtils {
     }
 
     /**
-     * Get public IP address
+     * Get public IP address with caching
      * @returns {Promise<string>} Public IP address
      */
     static async getPublicIp() {
+        // Cache IP for 5 minutes to avoid repeated requests
+        if (this._ipCache && this._ipCacheTime && Date.now() - this._ipCacheTime < 300000) {
+            return this._ipCache;
+        }
+
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            
             const response = await axios.get('https://api.ipify.org?format=json', {
-                timeout: 5000
+                timeout: 5000,
+                signal: controller.signal
             });
-            return response.data.ip;
+            
+            clearTimeout(timeoutId);
+            
+            this._ipCache = response.data.ip;
+            this._ipCacheTime = Date.now();
+            
+            return this._ipCache;
         } catch (error) {
+            // Try fallback services
+            const fallbackServices = [
+                'https://icanhazip.com/',
+                'https://ipinfo.io/ip'
+            ];
+            
+            for (const service of fallbackServices) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3000);
+                    
+                    const response = await axios.get(service, {
+                        timeout: 3000,
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    const ip = typeof response.data === 'string' ? response.data.trim() : response.data.ip;
+                    this._ipCache = ip;
+                    this._ipCacheTime = Date.now();
+                    
+                    return ip;
+                } catch (fallbackError) {
+                    continue;
+                }
+            }
+            
             return 'Unknown';
         }
     }
@@ -207,31 +253,77 @@ class CoreUtils {
     }
 
     /**
-     * Safe file read operation
+     * Safe file read operation with async support
      * @param {string} filePath - Path to file
-     * @returns {Buffer|null} File contents or null if error
+     * @param {Object} options - Read options
+     * @returns {Promise<Buffer|null>} File contents or null if error
      */
-    static safeReadFile(filePath) {
+    static async safeReadFileAsync(filePath, options = {}) {
         try {
-            return fs.readFileSync(filePath);
+            return await fs.promises.readFile(filePath, options);
         } catch (error) {
             return null;
         }
     }
 
     /**
-     * Safe file write operation
+     * Safe file read operation (synchronous)
+     * @param {string} filePath - Path to file
+     * @param {Object} options - Read options
+     * @returns {Buffer|null} File contents or null if error
+     */
+    static safeReadFile(filePath, options = {}) {
+        try {
+            return fs.readFileSync(filePath, options);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    /**
+     * Safe file write operation with async support
      * @param {string} filePath - Path to file
      * @param {Buffer|string} data - Data to write
-     * @returns {boolean} True if successful
+     * @param {Object} options - Write options
+     * @returns {Promise<boolean>} True if successful
      */
-    static safeWriteFile(filePath, data) {
+    static async safeWriteFileAsync(filePath, data, options = {}) {
         try {
-            this.createDirectoryRecursive(filePath);
-            fs.writeFileSync(filePath, data);
+            await this.createDirectoryRecursiveAsync(filePath);
+            await fs.promises.writeFile(filePath, data, options);
             return true;
         } catch (error) {
             return false;
+        }
+    }
+
+    /**
+     * Safe file write operation (synchronous)
+     * @param {string} filePath - Path to file
+     * @param {Buffer|string} data - Data to write
+     * @param {Object} options - Write options
+     * @returns {boolean} True if successful
+     */
+    static safeWriteFile(filePath, data, options = {}) {
+        try {
+            this.createDirectoryRecursive(filePath);
+            fs.writeFileSync(filePath, data, options);
+            return true;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
+     * Create directory recursively (async)
+     * @param {string} filePath - File path (directory will be extracted)
+     */
+    static async createDirectoryRecursiveAsync(filePath) {
+        try {
+            const dir = require('path').dirname(filePath);
+            await fs.promises.mkdir(dir, { recursive: true });
+        } catch (error) {
+            // Ignore errors
         }
     }
 
@@ -263,11 +355,123 @@ class CoreUtils {
     static async executeCommand(command, timeout = 10000) {
         try {
             const { stdout, stderr } = await exec(command, { timeout });
-            return { success: true, stdout, stderr };
+            return { success: true, stdout: stdout.trim(), stderr: stderr.trim() };
         } catch (error) {
             return { success: false, error: error.message };
         }
     }
+
+    /**
+     * Batch process array items with concurrency control
+     * @param {Array} items - Items to process
+     * @param {Function} processor - Processing function
+     * @param {number} concurrency - Max concurrent operations
+     * @returns {Promise<Array>} Results array
+     */
+    static async batchProcess(items, processor, concurrency = 5) {
+        const results = new Array(items.length);
+        const executing = [];
+
+        for (let i = 0; i < items.length; i++) {
+            const promise = (async (index) => {
+                try {
+                    const result = await processor(items[index], index);
+                    results[index] = { success: true, result };
+                } catch (error) {
+                    results[index] = { success: false, error: error.message };
+                }
+            })(i);
+
+            executing.push(promise);
+
+            if (executing.length >= concurrency) {
+                await Promise.race(executing);
+                executing.splice(executing.findIndex(p => p === promise), 1);
+            }
+        }
+
+        await Promise.all(executing);
+        return results;
+    }
+
+    /**
+     * Check if file exists asynchronously
+     * @param {string} filePath - Path to check
+     * @returns {Promise<boolean>} True if file exists
+     */
+    static async fileExists(filePath) {
+        try {
+            await fs.promises.access(filePath);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Get file size safely
+     * @param {string} filePath - Path to file
+     * @returns {Promise<number>} File size in bytes or 0 if error
+     */
+    static async getFileSize(filePath) {
+        try {
+            const stats = await fs.promises.stat(filePath);
+            return stats.size;
+        } catch {
+            return 0;
+        }
+    }
+
+    /**
+     * Rate limiter for function calls
+     * @param {Function} fn - Function to rate limit
+     * @param {number} delay - Delay between calls in ms
+     * @returns {Function} Rate limited function
+     */
+    static rateLimit(fn, delay) {
+        let lastCall = 0;
+        return async (...args) => {
+            const now = Date.now();
+            const timeSinceLastCall = now - lastCall;
+            
+            if (timeSinceLastCall < delay) {
+                await this.sleep(delay - timeSinceLastCall);
+            }
+            
+            lastCall = Date.now();
+            return fn(...args);
+        };
+    }
+
+    /**
+     * Retry function with exponential backoff
+     * @param {Function} fn - Function to retry
+     * @param {number} maxRetries - Maximum number of retries
+     * @param {number} baseDelay - Base delay in ms
+     * @returns {Promise} Function result
+     */
+    static async retry(fn, maxRetries = 3, baseDelay = 1000) {
+        let lastError;
+        
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                return await fn();
+            } catch (error) {
+                lastError = error;
+                
+                if (attempt === maxRetries) {
+                    throw lastError;
+                }
+                
+                const delay = baseDelay * Math.pow(2, attempt);
+                await this.sleep(delay);
+            }
+        }
+    }
 }
+
+// Static cache properties
+CoreUtils._ipCache = null;
+CoreUtils._ipCacheTime = null;
 
 module.exports = CoreUtils;

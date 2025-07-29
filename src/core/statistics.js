@@ -227,9 +227,8 @@ class Statistics {
      * @param {string} link - Optional file link
      * @returns {string} JSON payload
      */
-    buildWebhookPayload(username, hostname, ip, link = '') {
+    buildWebhookPayload(username, hostname, ip, _link = '') {
         const stats = this.getFormattedStats();
-        const timestamp = new Date().toISOString();
         
         // Use actual Discord account data if available
         const discordAccount = this.data.discord.accounts.length > 0 ? this.data.discord.accounts[0] : null;

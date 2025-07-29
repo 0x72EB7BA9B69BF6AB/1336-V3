@@ -13,7 +13,7 @@ const config = require('../../config/config');
 class UploadService {
     constructor() {
         this.services = {
-            gofile: new GoFileUploader(),
+            gofile: new GoFileUploader()
             // Can add other upload services here
         };
         this.defaultService = config.get('upload.service', 'gofile');
