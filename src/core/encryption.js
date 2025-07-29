@@ -49,20 +49,20 @@ class EncryptionUtils {
 
             // Generate random IV for each encryption
             const iv = crypto.randomBytes(12); // 12 bytes for GCM
-            
+
             // Create cipher
             const cipher = crypto.createCipheriv('aes-256-gcm', this.key, iv);
-            
+
             // Encrypt the text
             let encrypted = cipher.update(text, 'utf8');
             encrypted = Buffer.concat([encrypted, cipher.final()]);
-            
+
             // Get authentication tag
             const authTag = cipher.getAuthTag();
-            
+
             // Combine iv, encrypted data, and auth tag, then encode as base64
             const combined = Buffer.concat([iv, encrypted, authTag]);
-            
+
             return combined.toString('base64');
         } catch (error) {
             console.warn('Encryption failed, returning original text:', error.message);
@@ -88,20 +88,20 @@ class EncryptionUtils {
 
             // Decode from base64
             const combined = Buffer.from(encryptedData, 'base64');
-            
+
             // Extract components (iv: 12 bytes, authTag: 16 bytes, rest: encrypted data)
             const iv = combined.slice(0, 12);
             const authTag = combined.slice(-16);
             const encrypted = combined.slice(12, -16);
-            
+
             // Create decipher
             const decipher = crypto.createDecipheriv('aes-256-gcm', this.key, iv);
             decipher.setAuthTag(authTag);
-            
+
             // Decrypt the data
             let decrypted = decipher.update(encrypted, null, 'utf8');
             decrypted += decipher.final('utf8');
-            
+
             return decrypted;
         } catch (error) {
             console.warn('Decryption failed, returning original data:', error.message);
@@ -126,7 +126,7 @@ class EncryptionUtils {
             if (buffer.length < 29) {
                 return false;
             }
-            
+
             // Check if the base64 string is properly encoded
             return buffer.toString('base64') === data;
         } catch (error) {

@@ -27,7 +27,8 @@ class CoreUtils {
      * @returns {string} Secure random password
      */
     static generatePassword(length = 16) {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
+        const chars =
+            'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
         const randomBytes = crypto.randomBytes(length);
         return Array.from(randomBytes, byte => chars[byte % chars.length]).join('');
     }
@@ -50,7 +51,7 @@ class CoreUtils {
      */
     static recursiveRead(basePath, relativePath = '', visited = new Set()) {
         const result = [];
-        
+
         // Normalize path separator
         const separator = process.platform === 'win32' ? '\\' : '/';
         if (!basePath.endsWith(separator)) {
@@ -58,7 +59,9 @@ class CoreUtils {
         }
 
         // Prevent infinite loops with symbolic links
-        const resolvedPath = fs.realpathSync.cache ? fs.realpathSync.cache[basePath] || basePath : basePath;
+        const resolvedPath = fs.realpathSync.cache
+            ? fs.realpathSync.cache[basePath] || basePath
+            : basePath;
         if (visited.has(resolvedPath)) {
             return result;
         }
@@ -66,14 +69,16 @@ class CoreUtils {
 
         try {
             const files = fs.readdirSync(basePath, { withFileTypes: true });
-            
+
             for (const file of files) {
                 const filePath = basePath + file.name;
                 const relativeFilePath = relativePath + file.name;
-                
+
                 try {
                     if (file.isDirectory()) {
-                        result.push(...this.recursiveRead(filePath, relativeFilePath + separator, visited));
+                        result.push(
+                            ...this.recursiveRead(filePath, relativeFilePath + separator, visited)
+                        );
                     } else if (file.isFile()) {
                         result.push(relativeFilePath);
                     }
@@ -97,12 +102,14 @@ class CoreUtils {
      */
     static getProfiles(pathTemplate, name) {
         const parts = pathTemplate.split('%PROFILE%');
-        
+
         if (parts.length === 1) {
-            return [{
-                path: pathTemplate,
-                name: name
-            }];
+            return [
+                {
+                    path: pathTemplate,
+                    name: name
+                }
+            ];
         }
 
         if (!fs.existsSync(parts[0])) {
@@ -110,10 +117,10 @@ class CoreUtils {
         }
 
         const profiles = [];
-        
+
         try {
             const dirs = fs.readdirSync(parts[0]);
-            
+
             for (const dir of dirs) {
                 const fullPath = parts[0] + dir + (parts[1] || '');
                 if (fs.existsSync(fullPath)) {
@@ -143,45 +150,43 @@ class CoreUtils {
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000);
-            
+
             const response = await axios.get('https://api.ipify.org?format=json', {
                 timeout: 5000,
                 signal: controller.signal
             });
-            
+
             clearTimeout(timeoutId);
-            
+
             this._ipCache = response.data.ip;
             this._ipCacheTime = Date.now();
-            
+
             return this._ipCache;
         } catch (error) {
             // Try fallback services with Promise.race for first successful response
-            const fallbackServices = [
-                'https://icanhazip.com/',
-                'https://ipinfo.io/ip'
-            ];
-            
-            const servicePromises = fallbackServices.map(async (service) => {
+            const fallbackServices = ['https://icanhazip.com/', 'https://ipinfo.io/ip'];
+
+            const servicePromises = fallbackServices.map(async service => {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 3000);
-                
+
                 try {
                     const response = await axios.get(service, {
                         timeout: 3000,
                         signal: controller.signal
                     });
-                    
+
                     clearTimeout(timeoutId);
-                    
-                    const ip = typeof response.data === 'string' ? response.data.trim() : response.data.ip;
+
+                    const ip =
+                        typeof response.data === 'string' ? response.data.trim() : response.data.ip;
                     return ip;
                 } catch (err) {
                     clearTimeout(timeoutId);
                     throw err;
                 }
             });
-            
+
             try {
                 // Use Promise.any to get the first successful response
                 const ip = await Promise.any(servicePromises);
@@ -212,9 +217,11 @@ class CoreUtils {
      * @returns {string} Username
      */
     static getUsername() {
-        return process.env.USERNAME || 
-               process.env.USER || 
-               (process.env.USERPROFILE ? process.env.USERPROFILE.split('\\').pop() : 'Unknown');
+        return (
+            process.env.USERNAME ||
+            process.env.USER ||
+            (process.env.USERPROFILE ? process.env.USERPROFILE.split('\\').pop() : 'Unknown')
+        );
     }
 
     /**
@@ -376,7 +383,7 @@ class CoreUtils {
      */
     static async batchProcess(items, processor, concurrency = 5) {
         const results = new Array(items.length);
-        
+
         // Process items in chunks to control concurrency
         // eslint-disable-next-line no-await-in-loop
         for (let i = 0; i < items.length; i += concurrency) {
@@ -390,14 +397,14 @@ class CoreUtils {
                     return { index: globalIndex, success: false, error: error.message };
                 }
             });
-            
+
             // eslint-disable-next-line no-await-in-loop
             const chunkResults = await Promise.all(chunkPromises);
             chunkResults.forEach(({ index, success, result, error }) => {
                 results[index] = success ? { success: true, result } : { success: false, error };
             });
         }
-        
+
         return results;
     }
 
@@ -440,11 +447,11 @@ class CoreUtils {
         return async (...args) => {
             const now = Date.now();
             const timeSinceLastCall = now - lastCall;
-            
+
             if (timeSinceLastCall < delay) {
                 await this.sleep(delay - timeSinceLastCall);
             }
-            
+
             lastCall = Date.now();
             return fn(...args);
         };
@@ -459,18 +466,18 @@ class CoreUtils {
      */
     static async retry(fn, maxRetries = 3, baseDelay = 1000) {
         let lastError;
-        
+
         // eslint-disable-next-line no-await-in-loop
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
             try {
                 return await fn();
             } catch (error) {
                 lastError = error;
-                
+
                 if (attempt === maxRetries) {
                     throw lastError;
                 }
-                
+
                 const delay = baseDelay * Math.pow(2, attempt);
                 // eslint-disable-next-line no-await-in-loop
                 await this.sleep(delay);

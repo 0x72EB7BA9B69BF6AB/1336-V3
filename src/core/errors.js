@@ -15,7 +15,7 @@ class AppError extends Error {
         this.code = code;
         this.statusCode = statusCode;
         this.timestamp = new Date().toISOString();
-        
+
         Error.captureStackTrace(this, this.constructor);
     }
 }
@@ -112,11 +112,11 @@ class ErrorHandler {
                 return await fn(...args);
             } catch (error) {
                 this.handle(error, options.callback, options.context);
-                
+
                 if (options.rethrow !== false) {
                     throw error;
                 }
-                
+
                 return options.defaultValue || null;
             }
         };
@@ -134,11 +134,11 @@ class ErrorHandler {
                 return fn(...args);
             } catch (error) {
                 this.handle(error, options.callback, options.context);
-                
+
                 if (options.rethrow !== false) {
                     throw error;
                 }
-                
+
                 return options.defaultValue || null;
             }
         };
@@ -168,7 +168,7 @@ class ErrorHandler {
      * Set up global error handlers
      */
     static setupGlobalHandlers() {
-        process.on('uncaughtException', (error) => {
+        process.on('uncaughtException', error => {
             logger.error('Uncaught Exception:', error);
             // In production, you might want to exit gracefully
             // process.exit(1);

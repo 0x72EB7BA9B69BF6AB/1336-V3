@@ -35,23 +35,25 @@ class Logger {
 
         const levelNames = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
         const levelName = levelNames[level] || 'UNKNOWN';
-        
+
         let logMessage = `[${levelName}] ${message}`;
-        
+
         if (this.enableTimestamp) {
             const timestamp = new Date().toISOString();
             logMessage = `${timestamp} ${logMessage}`;
         }
 
         if (args.length > 0) {
-            logMessage += ' ' + args.map(arg => 
-                typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-            ).join(' ');
+            logMessage +=
+                ' ' +
+                args
+                    .map(arg => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg)))
+                    .join(' ');
         }
 
         if (this.enableConsole) {
-            const consoleMethod = level === this.levels.ERROR ? 'error' :
-                level === this.levels.WARN ? 'warn' : 'log';
+            const consoleMethod =
+                level === this.levels.ERROR ? 'error' : level === this.levels.WARN ? 'warn' : 'log';
             console[consoleMethod](logMessage);
         }
 

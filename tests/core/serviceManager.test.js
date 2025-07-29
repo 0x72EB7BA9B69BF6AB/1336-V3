@@ -2,7 +2,7 @@ const { ServiceManager } = require('../../src/core/serviceManager');
 
 describe('ServiceManager', () => {
     let serviceManager;
-    
+
     beforeEach(() => {
         serviceManager = new ServiceManager();
     });
@@ -17,33 +17,41 @@ describe('ServiceManager', () => {
         test('should register services without dependencies', () => {
             const mockService = { name: 'test' };
             serviceManager.register('test', () => mockService, []);
-            
+
             expect(serviceManager.dependencies.has('test')).toBe(true);
         });
 
         test('should register services with dependencies', () => {
             serviceManager.register('serviceA', () => ({ name: 'A' }), []);
             serviceManager.register('serviceB', () => ({ name: 'B' }), ['serviceA']);
-            
+
             expect(serviceManager.dependencies.has('serviceB')).toBe(true);
             expect(serviceManager.dependencies.get('serviceB').deps).toContain('serviceA');
         });
 
         test('should initialize services in dependency order', async () => {
             const initOrder = [];
-            
-            serviceManager.register('serviceA', () => {
-                initOrder.push('A');
-                return { name: 'A' };
-            }, []);
-            
-            serviceManager.register('serviceB', () => {
-                initOrder.push('B');
-                return { name: 'B' };
-            }, ['serviceA']);
-            
+
+            serviceManager.register(
+                'serviceA',
+                () => {
+                    initOrder.push('A');
+                    return { name: 'A' };
+                },
+                []
+            );
+
+            serviceManager.register(
+                'serviceB',
+                () => {
+                    initOrder.push('B');
+                    return { name: 'B' };
+                },
+                ['serviceA']
+            );
+
             await serviceManager.initialize();
-            
+
             expect(initOrder).toEqual(['A', 'B']);
             expect(serviceManager.initialized).toBe(true);
         });
@@ -89,10 +97,10 @@ describe('ServiceManager', () => {
                 name: 'healthy',
                 healthCheck: async () => 'healthy'
             };
-            
+
             serviceManager.register('healthyService', () => healthyService, []);
             await serviceManager.initialize();
-            
+
             const health = await serviceManager.checkHealth();
             expect(health.overall).toBe('healthy');
             expect(health.services.healthyService).toBe('healthy');
@@ -105,10 +113,10 @@ describe('ServiceManager', () => {
                     throw new Error('Service down');
                 }
             };
-            
+
             serviceManager.register('unhealthyService', () => unhealthyService, []);
             await serviceManager.initialize();
-            
+
             const health = await serviceManager.checkHealth();
             expect(health.overall).toBe('degraded');
             expect(health.services.unhealthyService).toContain('unhealthy');
@@ -122,11 +130,11 @@ describe('ServiceManager', () => {
                 name: 'test',
                 cleanup: cleanupMock
             };
-            
+
             serviceManager.register('testService', () => service, []);
             await serviceManager.initialize();
             await serviceManager.cleanup();
-            
+
             expect(cleanupMock).toHaveBeenCalled();
             expect(serviceManager.initialized).toBe(false);
         });
@@ -134,18 +142,22 @@ describe('ServiceManager', () => {
         test('should restart individual services', async () => {
             const initMock = jest.fn();
             const cleanupMock = jest.fn();
-            
-            serviceManager.register('restartableService', () => ({
-                name: 'restartable',
-                initialize: initMock,
-                cleanup: cleanupMock
-            }), []);
-            
+
+            serviceManager.register(
+                'restartableService',
+                () => ({
+                    name: 'restartable',
+                    initialize: initMock,
+                    cleanup: cleanupMock
+                }),
+                []
+            );
+
             await serviceManager.initialize();
             expect(initMock).toHaveBeenCalledTimes(1);
-            
+
             await serviceManager.restartService('restartableService');
-            
+
             expect(cleanupMock).toHaveBeenCalledTimes(1);
             expect(initMock).toHaveBeenCalledTimes(2);
         });
@@ -159,10 +171,14 @@ describe('ServiceManager', () => {
         });
 
         test('should handle initialization errors gracefully', async () => {
-            serviceManager.register('failingService', () => {
-                throw new Error('Init failed');
-            }, []);
-            
+            serviceManager.register(
+                'failingService',
+                () => {
+                    throw new Error('Init failed');
+                },
+                []
+            );
+
             await expect(serviceManager.initialize()).rejects.toThrow('Init failed');
         });
     });
