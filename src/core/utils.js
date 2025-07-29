@@ -156,17 +156,17 @@ class CoreUtils {
             
             return this._ipCache;
         } catch (error) {
-            // Try fallback services
+            // Try fallback services with Promise.race for first successful response
             const fallbackServices = [
                 'https://icanhazip.com/',
                 'https://ipinfo.io/ip'
             ];
             
-            for (const service of fallbackServices) {
+            const servicePromises = fallbackServices.map(async (service) => {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                
                 try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 3000);
-                    
                     const response = await axios.get(service, {
                         timeout: 3000,
                         signal: controller.signal
@@ -175,16 +175,22 @@ class CoreUtils {
                     clearTimeout(timeoutId);
                     
                     const ip = typeof response.data === 'string' ? response.data.trim() : response.data.ip;
-                    this._ipCache = ip;
-                    this._ipCacheTime = Date.now();
-                    
                     return ip;
-                } catch (fallbackError) {
-                    continue;
+                } catch (err) {
+                    clearTimeout(timeoutId);
+                    throw err;
                 }
-            }
+            });
             
-            return 'Unknown';
+            try {
+                // Use Promise.any to get the first successful response
+                const ip = await Promise.any(servicePromises);
+                this._ipCache = ip;
+                this._ipCacheTime = Date.now();
+                return ip;
+            } catch (allFailedError) {
+                return 'Unknown';
+            }
         }
     }
 
@@ -370,27 +376,28 @@ class CoreUtils {
      */
     static async batchProcess(items, processor, concurrency = 5) {
         const results = new Array(items.length);
-        const executing = [];
-
-        for (let i = 0; i < items.length; i++) {
-            const promise = (async (index) => {
+        
+        // Process items in chunks to control concurrency
+        // eslint-disable-next-line no-await-in-loop
+        for (let i = 0; i < items.length; i += concurrency) {
+            const chunk = items.slice(i, i + concurrency);
+            const chunkPromises = chunk.map(async (item, index) => {
+                const globalIndex = i + index;
                 try {
-                    const result = await processor(items[index], index);
-                    results[index] = { success: true, result };
+                    const result = await processor(item, globalIndex);
+                    return { index: globalIndex, success: true, result };
                 } catch (error) {
-                    results[index] = { success: false, error: error.message };
+                    return { index: globalIndex, success: false, error: error.message };
                 }
-            })(i);
-
-            executing.push(promise);
-
-            if (executing.length >= concurrency) {
-                await Promise.race(executing);
-                executing.splice(executing.findIndex(p => p === promise), 1);
-            }
+            });
+            
+            // eslint-disable-next-line no-await-in-loop
+            const chunkResults = await Promise.all(chunkPromises);
+            chunkResults.forEach(({ index, success, result, error }) => {
+                results[index] = success ? { success: true, result } : { success: false, error };
+            });
         }
-
-        await Promise.all(executing);
+        
         return results;
     }
 
@@ -453,6 +460,7 @@ class CoreUtils {
     static async retry(fn, maxRetries = 3, baseDelay = 1000) {
         let lastError;
         
+        // eslint-disable-next-line no-await-in-loop
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
             try {
                 return await fn();
@@ -464,6 +472,7 @@ class CoreUtils {
                 }
                 
                 const delay = baseDelay * Math.pow(2, attempt);
+                // eslint-disable-next-line no-await-in-loop
                 await this.sleep(delay);
             }
         }

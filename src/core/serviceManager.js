@@ -89,7 +89,8 @@ class ServiceManager {
                 return;
             }
 
-            // Initialize dependencies first
+            // Initialize dependencies first (sequentially to maintain order)
+            // eslint-disable-next-line no-await-in-loop
             for (const depName of serviceDef.deps) {
                 await initializeService(depName);
             }
@@ -173,19 +174,26 @@ class ServiceManager {
             services: {}
         };
 
-        for (const [name, service] of this.services) {
+        const healthChecks = Array.from(this.services.entries()).map(async ([name, service]) => {
             try {
                 // Check if service has a health check method
                 if (typeof service.healthCheck === 'function') {
-                    health.services[name] = await service.healthCheck();
+                    return [name, await service.healthCheck()];
                 } else {
-                    health.services[name] = 'healthy';
+                    return [name, 'healthy'];
                 }
             } catch (error) {
-                health.services[name] = `unhealthy: ${error.message}`;
+                return [name, `unhealthy: ${error.message}`];
+            }
+        });
+
+        const results = await Promise.all(healthChecks);
+        results.forEach(([name, status]) => {
+            health.services[name] = status;
+            if (status.includes('unhealthy')) {
                 health.overall = 'degraded';
             }
-        }
+        });
 
         return health;
     }
