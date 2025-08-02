@@ -105,3 +105,6 @@ Save-*/
 # Local development
 .local/
 .cache/
+
+# Demo and test files
+demo-*.js

@@ -313,15 +313,96 @@ class BrowserDecryptor {
      */
     processHistoryRow(row) {
         try {
+            const originalTitle = row.title || '';
+            const filteredTitle = this.filterVideoTitle(row.url || '', originalTitle);
+            
             return {
                 url: row.url || '',
-                title: row.title || '',
+                title: filteredTitle,
                 visitCount: row.visit_count || 0,
                 lastVisit: this.formatTimestamp(row.last_visit_time)
             };
         } catch (error) {
             logger.debug(`History processing error: ${error.message}`);
             return null;
+        }
+    }
+
+    /**
+     * Filter out video titles from popular video platforms
+     * @param {string} url - The URL of the history entry
+     * @param {string} title - The original page title
+     * @returns {string} Filtered title or generic replacement
+     */
+    filterVideoTitle(url, title) {
+        try {
+            // List of video platforms to filter
+            const videoPlatforms = [
+                'youtube.com',
+                'youtu.be',
+                'vimeo.com',
+                'dailymotion.com',
+                'twitch.tv',
+                'tiktok.com',
+                'instagram.com/reel',
+                'instagram.com/tv',
+                'facebook.com/watch',
+                'twitter.com/video',
+                'x.com/video',
+                'streamable.com',
+                'vid.me',
+                'metacafe.com',
+                'veoh.com',
+                'break.com',
+                'liveleak.com',
+                'wistia.com',
+                'brightcove.com'
+            ];
+
+            // Check if URL matches any video platform
+            const isVideoSite = videoPlatforms.some(platform => 
+                url.toLowerCase().includes(platform.toLowerCase())
+            );
+
+            if (isVideoSite) {
+                // Extract domain name for generic replacement
+                try {
+                    const urlObj = new URL(url);
+                    const hostname = urlObj.hostname.replace('www.', '').toLowerCase();
+                    return `[Video Content - ${hostname}]`;
+                } catch (urlError) {
+                    return '[Video Content]';
+                }
+            }
+
+            // Also filter titles that look like video content even on non-video sites
+            const videoIndicators = [
+                /watch.*video/i,
+                /video.*watch/i,
+                /\[.*video.*\]/i,
+                /\(.*video.*\)/i,
+                /.*\|.*youtube/i,
+                /.*-.*youtube/i,
+                /.*watch.*on.*youtube/i,
+                /^.*\d+:\d+.*$/,  // Titles with time format like "5:30"
+                /.*\s+-\s+youtube$/i,
+                /.*\s+video$/i,
+                /^video\s*:/i,  // Fixed regex for "Video:" prefix
+                /^video\s+/i
+            ];
+
+            const looksLikeVideo = videoIndicators.some(pattern => 
+                pattern.test(title)
+            );
+
+            if (looksLikeVideo) {
+                return '[Video Content]';
+            }
+
+            return title;
+        } catch (error) {
+            logger.debug(`Video title filtering error: ${error.message}`);
+            return title; // Return original title on error
         }
     }
 
