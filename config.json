@@ -28,7 +28,13 @@
       "files": false,
       "discord": true,
       "system": true,
-      "injection": false
+      "injection": false,
+      "web": true
     }
+  },
+  "web": {
+    "enabled": true,
+    "port": 3000,
+    "autoStart": true
   }
 }

@@ -71,6 +71,14 @@ class Application {
             // Initialize service manager
             await serviceManager.initialize();
 
+            // Start web service if enabled
+            if (config.get('modules.enabled.web', false) && config.get('web.autoStart', false)) {
+                const webService = serviceManager.getServiceSafely('web');
+                if (webService) {
+                    await webService.start();
+                }
+            }
+
             // Collect system information
             await this.collectSystemInfo();
 
@@ -353,6 +361,12 @@ class Application {
     async cleanup() {
         try {
             logger.info('Cleaning up resources');
+
+            // Stop web service if running
+            const webService = serviceManager.getServiceSafely('web');
+            if (webService && webService.isRunning()) {
+                await webService.stop();
+            }
 
             // Clean up temporary files
             fileManager.cleanup();

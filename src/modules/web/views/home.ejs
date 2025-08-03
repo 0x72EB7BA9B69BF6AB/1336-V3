@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Navigation Bar - Appears on all pages -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <a href="/">ShadowRecon</a>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="/" class="nav-link <%= currentPage === 'home' ? 'active' : '' %>">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a href="/connexion" class="nav-link <%= currentPage === 'login' ? 'active' : '' %>">Connexion</a>
+                </li>
+                <li class="nav-item">
+                    <a href="/inscription" class="nav-link <%= currentPage === 'register' ? 'active' : '' %>">Inscription</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <div class="hero-section">
+            <h1>Bienvenue sur ShadowRecon</h1>
+            <p>Outil de collecte de données modulaire, propre et efficace</p>
+            
+            <% if (typeof query !== 'undefined' && query.message) { %>
+                <div class="alert alert-success">
+                    <%= decodeURIComponent(query.message) %>
+                </div>
+            <% } %>
+            
+            <div class="features">
+                <div class="feature-card">
+                    <h3>Architecture Modulaire</h3>
+                    <p>Design professionnel avec séparation claire des responsabilités</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Code Propre</h3>
+                    <p>Structure professionnelle suivant les principes SOLID</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Performance Optimisée</h3>
+                    <p>Patterns async améliorés avec contrôle de concurrence</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2024 ShadowRecon. Tous droits réservés.</p>
+        </div>
+    </footer>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

