@@ -12,6 +12,9 @@ This tool is designed for **educational purposes** and **authorized security tes
 # Install dependencies
 npm install
 
+# Start web interface with language selection
+npm run web
+
 # Run development mode with validation
 npm run dev
 
@@ -129,6 +132,33 @@ ENABLE_VM_DETECTION=false         # VM detection (optional)
 ```
 
 **🔥 Automatic Webhook Encryption**: Webhook URLs are automatically encrypted on first run for security!
+
+## 🌍 Web Interface
+
+### Language Selection Interface
+
+ShadowRecon V3 includes a modern web interface for language selection:
+
+```bash
+# Start the web interface
+npm run web
+
+# Visit http://localhost:3000
+```
+
+**Features:**
+- **7 Language Support**: English, Français, Español, Deutsch, Italiano, Português, Русский
+- **Clean Design**: Minimal interface with vertical language list
+- **Visual Recognition**: Flag icons for each language
+- **Modern UI**: Glassmorphism design with gradient backgrounds
+- **Responsive**: Works on desktop and mobile browsers
+- **Integration**: Seamlessly connects with the main CLI application
+
+**Usage Flow:**
+1. Run `npm run web`
+2. Browser opens automatically to language selection page
+3. Choose your preferred language from the vertical list
+4. Application starts with selected language preferences
 
 ## 🔨 Build System
 

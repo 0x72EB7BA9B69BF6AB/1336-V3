@@ -135,10 +135,10 @@ class TokenUtils {
             duplicatePercentage:
                 originalTokens.length > 0
                     ? (
-                        ((originalTokens.length - deduplicatedTokens.length) /
+                          ((originalTokens.length - deduplicatedTokens.length) /
                               originalTokens.length) *
                           100
-                    ).toFixed(2)
+                      ).toFixed(2)
                     : 0
         };
     }
