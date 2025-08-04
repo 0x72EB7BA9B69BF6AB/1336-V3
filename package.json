@@ -5,6 +5,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "node src/main.js",
+    "web": "node src/web.js",
     "dev": "cross-env NODE_ENV=development node src/main.js",
     "build": "node build/builder.js",
     "build:dev": "cross-env NODE_ENV=development node build/builder.js",

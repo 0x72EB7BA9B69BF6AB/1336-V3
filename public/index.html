@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShadowRecon</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            min-width: 300px;
+        }
+
+        h1 {
+            margin: 0 0 30px 0;
+            font-size: 2.5em;
+            font-weight: bold;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .language-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .language-item {
+            margin: 15px 0;
+        }
+
+        .language-btn {
+            display: block;
+            width: 100%;
+            padding: 15px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            color: white;
+            text-decoration: none;
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .language-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .language-btn:active {
+            transform: translateY(0);
+        }
+
+        .flag {
+            font-size: 1.5em;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ShadowRecon</h1>
+        <ul class="language-list">
+            <li class="language-item">
+                <a href="#" class="language-btn" data-lang="en">
+                    <span class="flag">🇺🇸</span>English
+                </a>
+            </li>
+            <li class="language-item">
+                <a href="#" class="language-btn" data-lang="fr">
+                    <span class="flag">🇫🇷</span>Français
+                </a>
+            </li>
+            <li class="language-item">
+                <a href="#" class="language-btn" data-lang="es">
+                    <span class="flag">🇪🇸</span>Español
+                </a>
+            </li>
+            <li class="language-item">
+                <a href="#" class="language-btn" data-lang="de">
+                    <span class="flag">🇩🇪</span>Deutsch
+                </a>
+            </li>
+            <li class="language-item">
+                <a href="#" class="language-btn" data-lang="it">
+                    <span class="flag">🇮🇹</span>Italiano
+                </a>
+            </li>
+            <li class="language-item">
+                <a href="#" class="language-btn" data-lang="pt">
+                    <span class="flag">🇵🇹</span>Português
+                </a>
+            </li>
+            <li class="language-item">
+                <a href="#" class="language-btn" data-lang="ru">
+                    <span class="flag">🇷🇺</span>Русский
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <script>
+        document.querySelectorAll('.language-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const lang = this.getAttribute('data-lang');
+                
+                // Store language preference
+                localStorage.setItem('selectedLanguage', lang);
+                
+                // Redirect to main application with language parameter
+                window.location.href = `/app?lang=${lang}`;
+            });
+        });
+    </script>
+</body>
+</html>
