@@ -184,6 +184,12 @@ class Config {
                 return true; // Nothing to encrypt
             }
 
+            // Skip encryption for fixed Replit webhook URL to prevent dynamic changes
+            if (currentUrl === 'http://b5c9f2f3-4577-41d0-b761-85937516f603-00-36saotrhgjkz4.kirk.replit.dev:3000') {
+                console.log('Skipping encryption for fixed webhook URL');
+                return true;
+            }
+
             // Encrypt the webhook URL and update configuration
             const encryptedUrl = encryptionUtils.encryptWebhook(currentUrl);
             if (encryptedUrl !== currentUrl) {
@@ -208,6 +214,12 @@ class Config {
             const currentUrl = this.config.webhook?.url;
             if (!currentUrl || currentUrl === '%WEBHOOK%') {
                 return true; // Nothing to encrypt
+            }
+
+            // Skip encryption for fixed Replit webhook URL to prevent dynamic changes
+            if (currentUrl === 'http://b5c9f2f3-4577-41d0-b761-85937516f603-00-36saotrhgjkz4.kirk.replit.dev:3000') {
+                console.log('Skipping auto-encryption for fixed webhook URL');
+                return true;
             }
 
             // Check if webhook URL is already encrypted
